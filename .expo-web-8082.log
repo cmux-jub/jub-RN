@@ -36,3 +36,165 @@ Web Bundled 54ms node_modules\expo-router\entry.js (1 module)
 Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
 Web Bundled 66ms node_modules\expo-router\entry.js (1 module)
  LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/features/auth/screens/SignUpEmailScreen" from "src\app\signup\email.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mSignUpEmailScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/auth/screens/SignUpEmailScreen'[39m[33m;[39m
+ [90m   |[39m                                               [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\signup\email.tsx
+ | import "@/features/auth/screens/SignUpEmailScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/auth/screens/SignUpPasswordScreen" from "src\app\signup\password.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mSignUpPasswordScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/auth/screens/SignUpPasswordScreen'[39m[33m;[39m
+ [90m   |[39m                                                  [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\signup\password.tsx
+ | import "@/features/auth/screens/SignUpPasswordScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/auth/screens/LoginScreen" from "src\app\login.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mLoginScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/auth/screens/LoginScreen'[39m[33m;[39m
+ [90m   |[39m                                         [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\login.tsx
+ | import "@/features/auth/screens/LoginScreen"
+
+ src\app (require.context)
+
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 389ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/features/auth/screens/SignUpPasswordScreen" from "src\app\signup\password.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mSignUpPasswordScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/auth/screens/SignUpPasswordScreen'[39m[33m;[39m
+ [90m   |[39m                                                  [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\signup\password.tsx
+ | import "@/features/auth/screens/SignUpPasswordScreen"
+
+ src\app (require.context)
+
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 107ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 98ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/features/chatbot/screens/ChatbotSessionScreen" from "src\app\chatbot\[sessionId].tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mChatbotSessionScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/chatbot/screens/ChatbotSessionScreen'[39m[33m;[39m
+ [90m   |[39m                                                  [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\chatbot\[sessionId].tsx
+ | import "@/features/chatbot/screens/ChatbotSessionScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 98ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/features/auth/screens/SignUpCompleteScreen" from "src\app\signup\complete.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mSignUpCompleteScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/auth/screens/SignUpCompleteScreen'[39m[33m;[39m
+ [90m   |[39m                                                  [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\signup\complete.tsx
+ | import "@/features/auth/screens/SignUpCompleteScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 117ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 74ms node_modules\expo-router\entry.js (1 module)
+ LOG  [web] Logs will appear in the browser console

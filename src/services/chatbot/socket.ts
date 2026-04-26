@@ -1,14 +1,35 @@
+import { buildChatbotWebSocketUrl, normalizeChatbotWebSocketUrl } from '@/api/baseUrl';
 import type { Decision } from '@/api/types/common';
 import type { ChatbotServerSocketEvent } from '@/api/types/chatbot';
 
 type ChatbotSocketConfig = {
-  websocketUrl: string;
   accessToken: string;
+  sessionId?: string;
+  websocketUrl?: string;
   onMessage?: (event: ChatbotServerSocketEvent) => void;
 };
 
-export function createChatbotSocket({ websocketUrl, accessToken, onMessage }: ChatbotSocketConfig) {
-  const socket = new WebSocket(`${websocketUrl}?token=${accessToken}`);
+function resolveSocketUrl({ sessionId, websocketUrl }: Pick<ChatbotSocketConfig, 'sessionId' | 'websocketUrl'>) {
+  if (sessionId) {
+    return buildChatbotWebSocketUrl(sessionId);
+  }
+
+  if (websocketUrl) {
+    return normalizeChatbotWebSocketUrl(websocketUrl);
+  }
+
+  throw new Error('createChatbotSocket requires either sessionId or websocketUrl.');
+}
+
+export function createChatbotSocket({
+  accessToken,
+  sessionId,
+  websocketUrl,
+  onMessage,
+}: ChatbotSocketConfig) {
+  const resolvedSocketUrl = resolveSocketUrl({ sessionId, websocketUrl });
+  const authSeparator = resolvedSocketUrl.includes('?') ? '&' : '?';
+  const socket = new WebSocket(`${resolvedSocketUrl}${authSeparator}token=${accessToken}`);
 
   socket.onmessage = (event) => {
     if (!onMessage) {

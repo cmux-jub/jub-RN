@@ -36,6 +36,8 @@ const COPY = {
   submit: '\uD68C\uC6D0\uAC00\uC785',
   hasAccount: '\uACC4\uC815\uC774 \uC788\uC73C\uC2E0\uAC00\uC694?',
   login: '\uB85C\uADF8\uC778',
+  helper:
+    '\uC6F9\uC5D0\uC11C\uB294 \uBE0C\uB77C\uC6B0\uC800 \uC815\uCC45(CORS)\uC73C\uB85C \uD68C\uC6D0\uAC00\uC785\uC774 \uC81C\uD55C\uB420 \uC218 \uC788\uC5B4\uC694. \uC571/\uC5D0\uBBAC\uB808\uC774\uD130\uC5D0\uC11C \uD14C\uC2A4\uD2B8\uD574\uC8FC\uC138\uC694.',
   missingDraft:
     '\uC774\uBA54\uC77C\uACFC \uBE44\uBC00\uBC88\uD638\uB97C \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
 } as const;
@@ -162,6 +164,7 @@ export function SignUpNameScreen() {
             textContentType="name"
             value={nickname}
           />
+          <Text style={styles.helperText}>{COPY.helper}</Text>
           {submitError ? <Text style={styles.statusMessage}>{submitError}</Text> : null}
         </View>
 
@@ -284,6 +287,11 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: colors.red300,
+  },
+  helperText: {
+    color: colors.gray500,
+    fontSize: 12,
+    lineHeight: 17,
   },
   statusMessage: {
     color: colors.red300,

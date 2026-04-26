@@ -1,14 +1,10 @@
 import axios, { AxiosHeaders } from 'axios';
 
+import { apiBaseUrl } from '@/api/baseUrl';
 import { useAuthStore } from '@/store/authStore';
 
-const trimmedBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, '');
-const normalizedBaseUrl = trimmedBaseUrl
-  ? `${trimmedBaseUrl}${trimmedBaseUrl.endsWith('/v1') ? '' : '/v1'}`
-  : 'https://example.invalid/v1';
-
 export const apiClient = axios.create({
-  baseURL: normalizedBaseUrl,
+  baseURL: apiBaseUrl,
   headers: {
     'Content-Type': 'application/json',
   },
