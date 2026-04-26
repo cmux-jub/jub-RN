@@ -11,6 +11,15 @@ const LOGO_TOP_RATIO = 68 / FIGMA_SCREEN_HEIGHT;
 const HEADLINE_TOP_RATIO = 347 / FIGMA_SCREEN_HEIGHT;
 const CTA_BOTTOM_RATIO = 46 / FIGMA_SCREEN_HEIGHT;
 
+const COPY = {
+  money: '\uB3C8\uB3C4',
+  happiness: '\uD589\uBCF5\uB3C4',
+  body: '\uC90D\uACE0,\n\uC90D\uAC8C \uB3C4\uC640\uB4DC\uB9B4\uAC8C\uC694.',
+  start: '\uC2DC\uC791\uD558\uAE30',
+  noAccount: '\uACC4\uC815\uC774 \uC5C6\uC73C\uC2E0\uAC00\uC694?',
+  signUp: '\uD68C\uC6D0\uAC00\uC785',
+} as const;
+
 export function OnboardingLandingScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
@@ -42,9 +51,9 @@ export function OnboardingLandingScreen() {
 
         <View style={[styles.headlineContainer, { top: headlineTop }]}>
           <Text style={styles.headline}>
-            <Text style={styles.headlineStrong}>돈도</Text> 줍고,
+            <Text style={styles.headlineStrong}>{COPY.money}</Text> {COPY.body.split('\n')[0]}
             {'\n'}
-            <Text style={styles.headlineStrong}>행복도</Text> 줍게 도와드릴게요.
+            <Text style={styles.headlineStrong}>{COPY.happiness}</Text> {COPY.body.split('\n')[1]}
           </Text>
         </View>
 
@@ -54,18 +63,18 @@ export function OnboardingLandingScreen() {
             onPress={handleContinue}
             style={({ pressed }) => [styles.startButton, pressed && styles.startButtonPressed]}
           >
-            <Text style={styles.startButtonLabel}>시작하기</Text>
+            <Text style={styles.startButtonLabel}>{COPY.start}</Text>
           </Pressable>
 
           <View style={styles.signUpRow}>
-            <Text style={styles.signUpPrompt}>계정이 없으신가요?</Text>
+            <Text style={styles.signUpPrompt}>{COPY.noAccount}</Text>
             <Pressable
               accessibilityRole="button"
               hitSlop={8}
               onPress={handleSignUp}
               style={({ pressed }) => pressed && styles.signUpPressed}
             >
-              <Text style={styles.signUpLink}>회원가입</Text>
+              <Text style={styles.signUpLink}>{COPY.signUp}</Text>
             </Pressable>
           </View>
         </View>
