@@ -11,6 +11,8 @@ export const endpoints = {
     sync: '/banking/sync',
   },
   onboarding: {
+    questions: '/onboarding/questions',
+    feedback: '/onboarding/feedback',
     transactionsToLabel: '/onboarding/transactions-to-label',
     progress: '/onboarding/progress',
     firstInsight: '/onboarding/first-insight',
