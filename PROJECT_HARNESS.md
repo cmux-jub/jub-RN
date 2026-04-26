@@ -57,7 +57,9 @@
 
 - PRD 기반 RN 구현 범위의 기준 문서: `PROJECT_HARNESS.md`
 - API 연동의 단일 기준 문서: `API_SPEC.md`
+- 디자인 토큰과 시각 기준 문서: `design.md`
 - 이후 RN에서 REST client, WebSocket client, DTO 타입, enum, 에러 매핑, mock 응답을 만들 때는 `API_SPEC.md`를 source of truth로 사용한다
+- 이후 RN에서 색상, UI 스타일, 토큰, 컴포넌트 시각 규칙을 만들 때는 `design.md`를 먼저 확인하고 그 기준을 따른다
 
 ## 2. 절대하면 안되는 것
 
@@ -75,6 +77,7 @@
 - RN에서 추천 로직과 점수 계산 로직을 임의로 복제하지 않는다. 계산은 서버 응답을 따르고, RN은 표현과 입력 흐름에 집중한다
 - 백엔드가 정해지지 않았다는 이유로 화면 요구사항을 흐리게 만들지 않는다. 필요한 contract는 명시적으로 요구한다
 - `API_SPEC.md`에 정의된 엔드포인트, enum, WebSocket 이벤트 이름, 공통 응답 형식을 RN에서 임의 변경하지 않는다
+- UI 코드를 작성하기 전에 `design.md`를 읽지 않고 바로 스타일링하지 않는다
 
 ## 3. 사용할 기술스택
 
@@ -100,6 +103,7 @@
 - API schema가 바뀌더라도 화면이 전부 무너지지 않게 adapter 계층을 둔다
 - 초기에는 mock 응답과 실제 응답을 같은 interface로 다룬다
 - mock 데이터도 `API_SPEC.md`의 필드 구조와 동일하게 유지한다
+- 스타일 토큰은 임의 하드코딩보다 `design.md` 기준을 우선한다
 
 ## 4. 프로젝트의 정확한 목표
 
