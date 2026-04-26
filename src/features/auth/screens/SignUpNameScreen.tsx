@@ -12,6 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { signUp } from '@/api/auth';
+import {
+  DEFAULT_SIGN_UP_BIRTH_YEAR,
+  getAuthErrorMessage,
+} from '@/features/auth/utils/authFlow';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
@@ -31,28 +36,65 @@ const COPY = {
   submit: '\uD68C\uC6D0\uAC00\uC785',
   hasAccount: '\uACC4\uC815\uC774 \uC788\uC73C\uC2E0\uAC00\uC694?',
   login: '\uB85C\uADF8\uC778',
+  missingDraft:
+    '\uC774\uBA54\uC77C\uACFC \uBE44\uBC00\uBC88\uD638\uB97C \uBA3C\uC800 \uC785\uB825\uD574\uC8FC\uC138\uC694.',
 } as const;
 
 export function SignUpNameScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
-  const { signUpDraft, updateSignUpDraft } = useAuthStore();
+  const { signUpDraft, updateSignUpDraft, setSession } = useAuthStore();
   const [nickname, setNickname] = useState(signUpDraft.nickname);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalizedName = nickname.trim();
+  const canSubmit = normalizedName.length > 0 && !isSubmitting;
   const navTop = Math.max(44, Math.round(height * NAV_TOP_RATIO));
   const headerTop = Math.max(108, Math.round(height * HEADER_TOP_RATIO));
   const formTop = Math.max(219, Math.round(height * FORM_TOP_RATIO));
   const indicatorBottom = Math.max(146, Math.round(height * INDICATOR_BOTTOM_RATIO));
   const ctaBottom = Math.max(36, Math.round(height * CTA_BOTTOM_RATIO));
 
-  const handleSubmit = () => {
-    if (!normalizedName) {
+  const handleSubmit = async () => {
+    if (!canSubmit) {
       return;
     }
 
-    updateSignUpDraft({ nickname: normalizedName });
-    router.push('/signup/complete' as never);
+    if (!signUpDraft.email || !signUpDraft.password) {
+      setSubmitError(COPY.missingDraft);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const response = await signUp({
+        email: signUpDraft.email,
+        password: signUpDraft.password,
+        nickname: normalizedName,
+        birth_year: DEFAULT_SIGN_UP_BIRTH_YEAR,
+      });
+
+      if (!response.success) {
+        setSubmitError(response.error.message);
+        return;
+      }
+
+      updateSignUpDraft({ nickname: normalizedName });
+      setSession({
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        onboardingStatus: response.data.onboarding_status,
+      });
+
+      router.push('/signup/complete' as never);
+    } catch (error) {
+      setSubmitError(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleBack = () => {
@@ -107,6 +149,7 @@ export function SignUpNameScreen() {
             textContentType="name"
             value={nickname}
           />
+          {submitError ? <Text style={styles.statusMessage}>{submitError}</Text> : null}
         </View>
 
         <View style={[styles.indicatorRow, { bottom: indicatorBottom }]}>
@@ -118,8 +161,13 @@ export function SignUpNameScreen() {
         <View style={[styles.footerBlock, { bottom: ctaBottom }]}>
           <Pressable
             accessibilityRole="button"
+            disabled={!canSubmit}
             onPress={handleSubmit}
-            style={({ pressed }) => [styles.submitButton, pressed && styles.buttonPressed]}
+            style={({ pressed }) => [
+              styles.submitButton,
+              !canSubmit && styles.submitButtonDisabled,
+              pressed && canSubmit && styles.buttonPressed,
+            ]}
           >
             <Text style={styles.submitButtonLabel}>{COPY.submit}</Text>
           </Pressable>
@@ -221,6 +269,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
   },
+  statusMessage: {
+    color: colors.gray700,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   indicatorRow: {
     position: 'absolute',
     left: 0,
@@ -256,6 +309,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     paddingHorizontal: 24,
     paddingVertical: 18,
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.gray300,
   },
   submitButtonLabel: {
     color: colors.white,

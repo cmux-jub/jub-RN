@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Image,
@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { login } from '@/api/auth';
+import { getAuthErrorMessage, resolvePostAuthRoute } from '@/features/auth/utils/authFlow';
+import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
 const loginHeroOrb = require('../../../../assets/images/login-hero-orb.png');
@@ -22,11 +25,12 @@ const HERO_TOP_RATIO = 33 / FIGMA_SCREEN_HEIGHT;
 const HEADER_TOP_RATIO = 108 / FIGMA_SCREEN_HEIGHT;
 const FORM_TOP_RATIO = 224 / FIGMA_SCREEN_HEIGHT;
 const CTA_BOTTOM_RATIO = 54 / FIGMA_SCREEN_HEIGHT;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const COPY = {
   title: '\uB9CC\uB098\uC11C \uBC18\uAC00\uC6CC\uC694.',
-  subtitleTop: '\uB85C\uADF8\uC778\uD558\uC5EC \uB3C8 \uAD00\uB9AC\uC640',
-  subtitleBottom: '\uD589\uBCF5\uC744 \uD6A8\uC728\uC801\uC73C\uB85C \uAD00\uB9AC\uD574\uBD10\uC694!',
+  subtitleTop: '\uB85C\uADF8\uC778\uD558\uACE0 \uB098\uB9CC\uC758',
+  subtitleBottom: '\uD589\uBCF5\uC744 \uD6A8\uC728\uC801\uC73C\uB85C \uAD00\uB9AC\uD574\uBCF4\uC138\uC694!',
   email: '\uC774\uBA54\uC77C',
   password: '\uBE44\uBC00\uBC88\uD638',
   forgotPassword: '\uBE44\uBC00\uBC88\uD638 \uCC3E\uAE30',
@@ -38,16 +42,54 @@ const COPY = {
 export function LoginScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
+  const setSession = useAuthStore((state) => state.setSession);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const normalizedEmail = email.trim();
+  const canSubmit = useMemo(
+    () => EMAIL_PATTERN.test(normalizedEmail) && password.length > 0 && !isSubmitting,
+    [normalizedEmail, password, isSubmitting],
+  );
 
   const heroTop = Math.max(20, Math.round(height * HERO_TOP_RATIO));
   const headerTop = Math.max(96, Math.round(height * HEADER_TOP_RATIO));
   const formTop = Math.max(212, Math.round(height * FORM_TOP_RATIO));
   const ctaBottom = Math.max(36, Math.round(height * CTA_BOTTOM_RATIO));
 
-  const handleLogin = () => {
-    router.replace('/onboarding/connect-bank' as never);
+  const handleLogin = async () => {
+    if (!canSubmit) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const response = await login({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (!response.success) {
+        setSubmitError(response.error.message);
+        return;
+      }
+
+      setSession({
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+        onboardingStatus: response.data.onboarding_status,
+      });
+
+      router.replace(resolvePostAuthRoute(response.data.onboarding_status) as never);
+    } catch (error) {
+      setSubmitError(getAuthErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignUp = () => {
@@ -118,13 +160,20 @@ export function LoginScreen() {
           >
             <Text style={styles.forgotPassword}>{COPY.forgotPassword}</Text>
           </Pressable>
+
+          {submitError ? <Text style={styles.statusMessage}>{submitError}</Text> : null}
         </View>
 
         <View style={[styles.footerBlock, { bottom: ctaBottom }]}>
           <Pressable
             accessibilityRole="button"
+            disabled={!canSubmit}
             onPress={handleLogin}
-            style={({ pressed }) => [styles.loginButton, pressed && styles.buttonPressed]}
+            style={({ pressed }) => [
+              styles.loginButton,
+              !canSubmit && styles.loginButtonDisabled,
+              pressed && canSubmit && styles.buttonPressed,
+            ]}
           >
             <Text style={styles.loginButtonLabel}>{COPY.login}</Text>
           </Pressable>
@@ -216,6 +265,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
   },
+  statusMessage: {
+    color: colors.gray700,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   footerBlock: {
     position: 'absolute',
     left: 20,
@@ -230,6 +284,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.black,
     paddingHorizontal: 24,
     paddingVertical: 18,
+  },
+  loginButtonDisabled: {
+    backgroundColor: colors.gray300,
   },
   loginButtonLabel: {
     color: colors.white,
