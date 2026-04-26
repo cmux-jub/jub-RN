@@ -20,7 +20,7 @@ const CONNECT_BANK_ROUTE = '/onboarding/connect-bank' as never;
 const HAPPY_ARCHIVE_ROUTE = '/insights/archive' as never;
 const RETROSPECTIVE_ROUTE = '/retrospective' as never;
 const HOME_ROUTE = '/insights' as never;
-const MAIN_CHATBOT_ROUTE = '/chatbot/demo-session' as never;
+const MAIN_CHATBOT_ROUTE = '/chatbot' as never;
 const TAB_BAR_HEIGHT = 90;
 
 const LINKED_HOME_CONTENT = {

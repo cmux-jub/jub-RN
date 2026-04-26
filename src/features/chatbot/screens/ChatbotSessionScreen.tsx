@@ -15,13 +15,14 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { startChatbotSession } from '@/api/chatbot';
-import type { ApiFailureResponse } from '@/api/types/common';
+import { fetchChatbotSessionDetail, startChatbotSession } from '@/api/chatbot';
+import type { ApiFailureResponse, Decision } from '@/api/types/common';
 import type {
   ChatbotMessage,
   ChatbotServerSocketEvent,
   StartChatbotSessionRequest,
 } from '@/api/types/chatbot';
+import { DECISION_LABELS } from '@/features/chatbot/utils';
 import { createChatbotSocket, sendChatbotMessage } from '@/services/chatbot/socket';
 import { appEvents } from '@/services/tracking/events';
 import { track } from '@/services/tracking/tracker';
@@ -176,12 +177,18 @@ function MessageBubble({ message }: { message: ChatbotMessage }) {
   );
 }
 
-function FeedbackPrompt({ onPress }: { onPress: () => void }) {
+function SessionActionPrompt({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.feedbackPrompt}>
       <BrandMark backgroundColor={colors.white} size={24} />
       <Text numberOfLines={1} style={styles.feedbackPromptText}>
-        대화가 만족스러우셨나요? 만족할 시 <Text style={styles.feedbackPromptLink}>클릭</Text>
+        {label}
       </Text>
     </Pressable>
   );
@@ -261,27 +268,40 @@ function getErrorMessage(error: unknown, fallbackMessage: string) {
 }
 
 export function ChatbotSessionScreen() {
-  const { sessionId: routeSessionId } = useLocalSearchParams<{ sessionId?: string }>();
+  const { sessionId: routeSessionId, autoStart } = useLocalSearchParams<{
+    sessionId?: string;
+    autoStart?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const connectedSessionIdRef = useRef<string | null>(null);
+  const autoStartTriggeredRef = useRef(false);
   const accessToken = useAuthStore((state) => state.accessToken);
-  const { activeSessionId, activeWebsocketUrl, draftMessage, setDraftMessage, startSession } =
-    useChatbotSessionStore((state) => ({
-      activeSessionId: state.activeSessionId,
-      activeWebsocketUrl: state.activeWebsocketUrl,
-      draftMessage: state.draftMessage,
-      setDraftMessage: state.setDraftMessage,
-      startSession: state.startSession,
-    }));
+  const {
+    activeSessionId,
+    activeWebsocketUrl,
+    draftMessage,
+    setDraftMessage,
+    startSession,
+    setResolvedSummary,
+  } = useChatbotSessionStore((state) => ({
+    activeSessionId: state.activeSessionId,
+    activeWebsocketUrl: state.activeWebsocketUrl,
+    draftMessage: state.draftMessage,
+    setDraftMessage: state.setDraftMessage,
+    startSession: state.startSession,
+    setResolvedSummary: state.setResolvedSummary,
+  }));
   const [messages, setMessages] = useState<ChatbotMessage[]>([]);
   const [composerHeight, setComposerHeight] = useState(0);
   const [streamingAssistantText, setStreamingAssistantText] = useState('');
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isAwaitingAssistant, setIsAwaitingAssistant] = useState(false);
   const [isSocketReady, setIsSocketReady] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sessionDecision, setSessionDecision] = useState<Decision | null>(null);
 
   const liveSessionId =
     routeSessionId && routeSessionId !== PREVIEW_SESSION_ID ? routeSessionId : activeSessionId;
@@ -289,7 +309,13 @@ export function ChatbotSessionScreen() {
     routeSessionId && routeSessionId !== PREVIEW_SESSION_ID
       ? undefined
       : activeWebsocketUrl ?? undefined;
-  const previewPrompt = draftMessage.trim().length > 0 ? draftMessage.trim() : EMPTY_PREVIEW_PROMPT;
+  const isHistoricalSession = Boolean(
+    routeSessionId &&
+      routeSessionId !== PREVIEW_SESSION_ID &&
+      routeSessionId !== activeSessionId,
+  );
+  const previewPrompt =
+    draftMessage.trim().length > 0 ? draftMessage.trim() : EMPTY_PREVIEW_PROMPT;
   const visibleMessages =
     isAwaitingAssistant || streamingAssistantText.length > 0
       ? [
@@ -307,7 +333,13 @@ export function ChatbotSessionScreen() {
   const hasConversation = visibleMessages.length > 0;
   const hasAssistantMessage = messages.some((message) => message.role === 'assistant');
   const feedbackBottomOffset = composerHeight + spacing.lg;
-  const isSendDisabled = draftMessage.trim().length === 0 || isCreatingSession;
+  const isReadOnlySession = isHistoricalSession || sessionDecision !== null;
+  const isSendDisabled =
+    draftMessage.trim().length === 0 || isCreatingSession || isReadOnlySession;
+  const actionPromptLabel =
+    sessionDecision && liveSessionId
+      ? `상담 요약 보기 · ${DECISION_LABELS[sessionDecision]}`
+      : '이 상담 정리하고 결정하기';
 
   useEffect(() => {
     if (!hasConversation) {
@@ -316,6 +348,62 @@ export function ChatbotSessionScreen() {
 
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [hasConversation, isAwaitingAssistant, messages.length, streamingAssistantText]);
+
+  useEffect(() => {
+    if (!routeSessionId || routeSessionId === PREVIEW_SESSION_ID || !accessToken) {
+      return;
+    }
+
+    if (!isHistoricalSession && messages.length > 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadDetail = async () => {
+      setIsDetailLoading(true);
+      setSessionError(null);
+
+      try {
+        const response = await fetchChatbotSessionDetail(routeSessionId);
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!response.success) {
+          setSessionError(response.error.message);
+          return;
+        }
+
+        setMessages(response.data.messages);
+        setSessionDecision(response.data.decision);
+        setResolvedSummary(response.data.session_id, response.data.summary);
+      } catch (error) {
+        if (!isCancelled) {
+          setSessionError(
+            error instanceof Error ? error.message : '대화 내용을 불러오지 못했어요.',
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsDetailLoading(false);
+        }
+      }
+    };
+
+    void loadDetail();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    accessToken,
+    isHistoricalSession,
+    messages.length,
+    routeSessionId,
+    setResolvedSummary,
+  ]);
 
   const handleSocketMessage = useEffectEvent((event: ChatbotServerSocketEvent) => {
     switch (event.type) {
@@ -350,13 +438,15 @@ export function ChatbotSessionScreen() {
       case 'session_closed': {
         setStreamingAssistantText('');
         setIsAwaitingAssistant(false);
+        setSessionDecision(event.decision);
+        setResolvedSummary(event.session_id, event.summary);
         break;
       }
     }
   });
 
   useEffect(() => {
-    if (!accessToken || !liveSessionId) {
+    if (!accessToken || !liveSessionId || isHistoricalSession) {
       return;
     }
 
@@ -414,22 +504,15 @@ export function ChatbotSessionScreen() {
         setIsSocketReady(false);
       }
     };
-  }, [accessToken, handleSocketMessage, liveSessionId, liveWebsocketUrl]);
+  }, [
+    accessToken,
+    handleSocketMessage,
+    isHistoricalSession,
+    liveSessionId,
+    liveWebsocketUrl,
+  ]);
 
-  const handleGoBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace('/chatbot');
-  };
-
-  const handleComposerLayout = (event: LayoutChangeEvent) => {
-    setComposerHeight(event.nativeEvent.layout.height);
-  };
-
-  const handleSend = async () => {
+  const handleSend = useEffectEvent(async () => {
     const content = draftMessage.trim();
 
     if (content.length === 0) {
@@ -508,12 +591,55 @@ export function ChatbotSessionScreen() {
     setIsAwaitingAssistant(true);
     setStreamingAssistantText('');
     sendChatbotMessage(socketRef.current, content);
+  });
+
+  useEffect(() => {
+    if (
+      autoStart !== '1' ||
+      autoStartTriggeredRef.current ||
+      isReadOnlySession ||
+      draftMessage.trim().length === 0
+    ) {
+      return;
+    }
+
+    autoStartTriggeredRef.current = true;
+    void handleSend();
+  }, [autoStart, draftMessage, handleSend, isReadOnlySession]);
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/chatbot' as never);
   };
 
-  const handleOpenDecisionFlow = () => {
-    const decisionSessionId = liveSessionId ?? routeSessionId ?? PREVIEW_SESSION_ID;
-    router.push(`/chatbot/decision/${decisionSessionId}` as never);
+  const handleComposerLayout = (event: LayoutChangeEvent) => {
+    setComposerHeight(event.nativeEvent.layout.height);
   };
+
+  const handleOpenDecisionOrSummary = () => {
+    if (!liveSessionId) {
+      return;
+    }
+
+    if (sessionDecision) {
+      router.push({
+        pathname: '/chatbot/summary/[sessionId]',
+        params: { sessionId: liveSessionId, decision: sessionDecision },
+      } as never);
+      return;
+    }
+
+    router.push({
+      pathname: '/chatbot/decision/[sessionId]',
+      params: { sessionId: liveSessionId },
+    } as never);
+  };
+
+  const shouldShowActionPrompt = Boolean(hasAssistantMessage && liveSessionId);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
@@ -536,7 +662,11 @@ export function ChatbotSessionScreen() {
         </View>
 
         <View style={styles.content}>
-          {hasConversation ? (
+          {isDetailLoading && !hasConversation ? (
+            <View style={styles.emptyStateWrapper}>
+              <Text style={styles.loadingStateText}>이전 대화를 불러오는 중이에요.</Text>
+            </View>
+          ) : hasConversation ? (
             <View style={styles.messageStage}>
               <Watermark />
               <ScrollView
@@ -556,12 +686,15 @@ export function ChatbotSessionScreen() {
                   />
                 ))}
               </ScrollView>
-              {hasAssistantMessage ? (
+              {shouldShowActionPrompt ? (
                 <View
                   pointerEvents="box-none"
                   style={[styles.feedbackPromptWrap, { bottom: feedbackBottomOffset }]}
                 >
-                  <FeedbackPrompt onPress={handleOpenDecisionFlow} />
+                  <SessionActionPrompt
+                    label={actionPromptLabel}
+                    onPress={handleOpenDecisionOrSummary}
+                  />
                 </View>
               ) : null}
             </View>
@@ -572,44 +705,66 @@ export function ChatbotSessionScreen() {
           )}
         </View>
 
-        <View
-          onLayout={handleComposerLayout}
-          style={[
-            styles.composerShell,
-            {
-              paddingBottom: Math.max(insets.bottom, spacing.xs),
-            },
-          ]}
-        >
-          {sessionError ? <Text style={styles.sessionErrorText}>{sessionError}</Text> : null}
+        {!isReadOnlySession ? (
+          <View
+            onLayout={handleComposerLayout}
+            style={[
+              styles.composerShell,
+              {
+                paddingBottom: Math.max(insets.bottom, spacing.xs),
+              },
+            ]}
+          >
+            {sessionError ? <Text style={styles.sessionErrorText}>{sessionError}</Text> : null}
 
-          <View style={styles.composerRow}>
-            <TextInput
-              accessibilityLabel="채팅 입력"
-              onChangeText={setDraftMessage}
-              onSubmitEditing={() => {
-                void handleSend();
-              }}
-              placeholder="원하는 물품과 가격을 알려주세요."
-              placeholderTextColor={colors.gray400}
-              returnKeyType="send"
-              style={styles.composerInput}
-              value={draftMessage}
-            />
+            <View style={styles.composerRow}>
+              <TextInput
+                accessibilityLabel="채팅 입력"
+                onChangeText={setDraftMessage}
+                onSubmitEditing={() => {
+                  void handleSend();
+                }}
+                placeholder="원하는 물품과 가격을 알려주세요."
+                placeholderTextColor={colors.gray400}
+                returnKeyType="send"
+                style={styles.composerInput}
+                value={draftMessage}
+              />
+              <Pressable
+                accessibilityLabel="메시지 전송"
+                accessibilityRole="button"
+                disabled={isSendDisabled}
+                hitSlop={8}
+                onPress={() => {
+                  void handleSend();
+                }}
+                style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
+              >
+                <SendIcon />
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.readOnlyFooter,
+              {
+                paddingBottom: Math.max(insets.bottom, spacing.md),
+              },
+            ]}
+          >
+            {sessionError ? <Text style={styles.sessionErrorText}>{sessionError}</Text> : null}
             <Pressable
-              accessibilityLabel="메시지 전송"
               accessibilityRole="button"
-              disabled={isSendDisabled}
-              hitSlop={8}
-              onPress={() => {
-                void handleSend();
-              }}
-              style={[styles.sendButton, isSendDisabled && styles.sendButtonDisabled]}
+              onPress={handleOpenDecisionOrSummary}
+              style={({ pressed }) => [styles.readOnlyButton, pressed && styles.buttonPressed]}
             >
-              <SendIcon />
+              <Text style={styles.readOnlyButtonLabel}>
+                {sessionDecision ? '상담 요약 보기' : '결정 화면으로 이동'}
+              </Text>
             </Pressable>
           </View>
-        </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -688,6 +843,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
     paddingBottom: 42,
+  },
+  loadingStateText: {
+    color: colors.gray600,
+    fontSize: 15,
+    lineHeight: 22,
   },
   emptyHero: {
     alignItems: 'center',
@@ -792,16 +952,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.black,
   },
-  feedbackPromptLink: {
-    color: colors.mint500,
-    textDecorationLine: 'underline',
-  },
   composerShell: {
     backgroundColor: colors.white,
     borderTopLeftRadius: COMPOSER_CORNER_RADIUS,
     borderTopRightRadius: COMPOSER_CORNER_RADIUS,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.md,
+  },
+  readOnlyFooter: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: COMPOSER_CORNER_RADIUS,
+    borderTopRightRadius: COMPOSER_CORNER_RADIUS,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  readOnlyButton: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.gray900,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  readOnlyButtonLabel: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 21,
   },
   sessionErrorText: {
     marginBottom: spacing.sm,
@@ -868,5 +1046,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.white,
     transform: [{ rotate: '-35deg' }],
+  },
+  buttonPressed: {
+    opacity: 0.82,
   },
 });
