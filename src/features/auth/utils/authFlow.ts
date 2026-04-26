@@ -8,7 +8,7 @@ export const DEFAULT_SIGN_UP_BIRTH_YEAR = 1998;
 export function resolvePostAuthRoute(onboardingStatus: OnboardingStatus) {
   switch (onboardingStatus) {
     case 'NEEDS_BANK_LINK':
-      return '/onboarding/connect-bank';
+      return '/insights';
     case 'NEEDS_LABELING':
       return '/onboarding/labeling';
     case 'READY':
