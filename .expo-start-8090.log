@@ -1,0 +1,15 @@
+
+> jub-rn@1.0.0 start:clear
+> expo start --clear --port 8090
+
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL
+Starting project at C:\Users\user\Desktop\jub-RN
+Using src/app as the root directory for Expo Router.
+React Compiler enabled
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8090
+Logs for your project will appear below.
+일괄 작업을 끝내시겠습니까 (Y/N)? 
