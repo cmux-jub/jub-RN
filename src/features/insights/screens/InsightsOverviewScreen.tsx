@@ -24,25 +24,26 @@ const MAIN_CHATBOT_ROUTE = '/chatbot/demo-session' as never;
 const TAB_BAR_HEIGHT = 90;
 
 const LINKED_HOME_CONTENT = {
-  userName: '김효현',
-  planLabel: 'FreePlan',
-  happyPrompt: '내가 잘 쓴 소비내역',
+  userName: '김주현',
+  planLabel: 'Free Plan',
+  happyPrompt: '내가 행복했던 소비 내역',
   accountStatus: '전체 계좌와 연결 완료',
-  happyCategory: '“식비”',
+  happyCategory: '외식비',
   lastMonthSpend: 1_895_000,
   lastMonthSpendDelta: '-12%',
   lastMonthSaved: 240_000,
   lastMonthSavedDelta: '+22%',
-  retrospectiveHeadline: '이번 주의 소비 내역에 대해 알아보세요',
-  retrospectiveFooter: '구매 경험 남기고 회고하기',
+  retrospectiveHeadline: '이번 주의 소비 내역을 다시 돌아보세요.',
+  retrospectiveFooter: '구매 경험 되짚고 회고하기',
 } as const;
 
 const UNLINKED_HOME_CONTENT = {
-  happyPrompt: '내가 잘 쓴 소비내역',
-  accountStatus: '오픈 뱅킹 연결이 필요해요',
+  happyPrompt: '내가 행복했던 소비 내역',
+  bankLinkTitle: '오픈뱅킹 연동하기',
+  bankLinkSubtitle: '최근 3개월 거래를 연결해서 소비 기록을 바로 불러와요.',
+  accountStatus: '오픈뱅킹 연결이 필요해요',
   happyMessage: '계좌를 연결하면 만족스러웠던 소비를 바로 모아드릴게요.',
-  happyAction: '계좌 연결하기',
-  retrospectiveHeadline: '이번 주의 소비를 회고하려면 계좌 연결을 먼저 완료해주세요',
+  retrospectiveHeadline: '이번 주의 소비를 회고하려면 계좌 연결을 먼저 완료해주세요.',
   retrospectiveFooter: '계좌 연결하고 회고 준비하기',
 } as const;
 
@@ -51,7 +52,7 @@ export function InsightsOverviewScreen() {
   const router = useRouter();
   const onboardingStatus = useAuthStore((state) => state.onboardingStatus);
   const signUpNickname = useAuthStore((state) => state.signUpDraft.nickname);
-  const isBankLinked = onboardingStatus !== 'NEEDS_BANK_LINK';
+  const isBankLinked = onboardingStatus === 'NEEDS_LABELING' || onboardingStatus === 'READY';
   const trimmedNickname = signUpNickname.trim();
   const displayName =
     trimmedNickname.length > 0 ? trimmedNickname : LINKED_HOME_CONTENT.userName;
@@ -96,7 +97,9 @@ export function InsightsOverviewScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <TopPromptChip label={isBankLinked ? LINKED_HOME_CONTENT.happyPrompt : UNLINKED_HOME_CONTENT.happyPrompt} />
+          <TopPromptChip
+            label={isBankLinked ? LINKED_HOME_CONTENT.happyPrompt : UNLINKED_HOME_CONTENT.happyPrompt}
+          />
 
           <View style={styles.profileRow}>
             <View style={styles.profileCopy}>
@@ -104,13 +107,42 @@ export function InsightsOverviewScreen() {
               <Text style={styles.profilePlan}>{LINKED_HOME_CONTENT.planLabel}</Text>
             </View>
 
-            <Image accessible={false} resizeMode="contain" source={settingsIcon} style={styles.settingsIcon} />
+            <Image
+              accessible={false}
+              resizeMode="contain"
+              source={settingsIcon}
+              style={styles.settingsIcon}
+            />
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>행복 소비 찾아보기</Text>
 
             <View style={styles.happySpendCard}>
+              {!isBankLinked ? (
+                <View style={styles.bankLinkHeader}>
+                  <View style={styles.bankLinkCopy}>
+                    <Text style={styles.bankLinkTitle}>{UNLINKED_HOME_CONTENT.bankLinkTitle}</Text>
+                    <Text style={styles.bankLinkSubtitle}>
+                      {UNLINKED_HOME_CONTENT.bankLinkSubtitle}
+                    </Text>
+                  </View>
+
+                  <Pressable
+                    accessibilityLabel="오픈뱅킹 연결 시작"
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={handleConnectBank}
+                    style={({ pressed }) => [
+                      styles.bankLinkButton,
+                      pressed && styles.bankLinkButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.bankLinkButtonLabel}>+</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               <Text style={styles.accountStatus}>
                 {isBankLinked
                   ? LINKED_HOME_CONTENT.accountStatus
@@ -125,30 +157,24 @@ export function InsightsOverviewScreen() {
                   style={[styles.happyBadgeIcon, !isBankLinked && styles.happyBadgeIconDisabled]}
                 />
 
-                <Text style={isBankLinked ? styles.happyInsightText : styles.happyInsightTextDisabled}>
+                <Text
+                  style={isBankLinked ? styles.happyInsightText : styles.happyInsightTextDisabled}
+                >
                   {isBankLinked
                     ? `${displayName}님의 행복 소비는 ${LINKED_HOME_CONTENT.happyCategory} 지출입니다.`
                     : UNLINKED_HOME_CONTENT.happyMessage}
                 </Text>
               </View>
 
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleHappyArchivePress}
-                style={({ pressed }) => [
-                  styles.happyActionButton,
-                  !isBankLinked && styles.happyActionButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text
-                  style={
-                    isBankLinked ? styles.happyActionLabel : styles.happyActionLabelDisabled
-                  }
+              {isBankLinked ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handleHappyArchivePress}
+                  style={({ pressed }) => [styles.happyActionButton, pressed && styles.pressed]}
                 >
-                  {isBankLinked ? '행복 지출 분석하기' : UNLINKED_HOME_CONTENT.happyAction}
-                </Text>
-              </Pressable>
+                  <Text style={styles.happyActionLabel}>행복 지출 분석하기</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -252,7 +278,12 @@ type TopPromptChipProps = {
 function TopPromptChip({ label }: TopPromptChipProps) {
   return (
     <View style={styles.topPromptChip}>
-      <Image accessible={false} resizeMode="contain" source={topChipIcon} style={styles.topPromptIcon} />
+      <Image
+        accessible={false}
+        resizeMode="contain"
+        source={topChipIcon}
+        style={styles.topPromptIcon}
+      />
       <Text style={styles.topPromptLabel}>{label}</Text>
     </View>
   );
@@ -441,6 +472,44 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     gap: 22,
   },
+  bankLinkHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bankLinkCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  bankLinkTitle: {
+    color: colors.gray900,
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  bankLinkSubtitle: {
+    color: colors.gray500,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  bankLinkButton: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: colors.mint400,
+  },
+  bankLinkButtonPressed: {
+    opacity: 0.82,
+  },
+  bankLinkButtonLabel: {
+    color: colors.white,
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 28,
+    marginTop: -2,
+  },
   accountStatus: {
     color: colors.gray400,
     fontSize: 12,
@@ -483,17 +552,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 11,
   },
-  happyActionButtonDisabled: {
-    backgroundColor: colors.gray200,
-  },
   happyActionLabel: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  happyActionLabelDisabled: {
-    color: colors.gray500,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 22,

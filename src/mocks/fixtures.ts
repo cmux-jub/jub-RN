@@ -18,9 +18,9 @@ export const mockTransactionsToLabel: TransactionsToLabelResponseData = {
 };
 
 export const mockChatbotSummary: ChatbotSessionSummary = {
-  product: 'Headphones',
-  amount: 350000,
-  user_reasoning: 'Likely to use it every day.',
-  ai_data_shown: 'Compared category satisfaction and similar-price history.',
+  product: '중고 에어팟',
+  amount: 300000,
+  user_reasoning: '출퇴근 때마다 쓸 것 같아서 계속 눈에 들어왔어요.',
+  ai_data_shown: '이어폰 관련 과거 소비와 비슷한 가격대 만족도를 함께 비교했어요.',
   decision: 'BUY',
 };

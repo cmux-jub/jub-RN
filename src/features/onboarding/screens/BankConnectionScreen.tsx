@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchCurrentUser } from '@/api/auth';
 import { completeBankOAuth, startBankOAuth, syncTransactions } from '@/api/banking';
 import type { LinkedAccount } from '@/api/types/banking';
-import type { OnboardingStatus } from '@/api/types/common';
 import { SectionCard } from '@/components/ui/SectionCard';
 import { getAuthErrorMessage, resolvePostAuthRoute } from '@/features/auth/utils/authFlow';
 import { useAuthStore } from '@/store/authStore';
@@ -179,7 +178,7 @@ export function BankConnectionScreen() {
     setPhase('success');
   };
 
-  const beginOAuth = async () => {
+  const beginOAuth = useCallback(async () => {
     setErrorMessage(null);
     setSyncSummary(null);
 
@@ -207,7 +206,7 @@ export function BankConnectionScreen() {
         getAuthErrorMessage(error, '오픈뱅킹 인증을 시작하지 못했어요. 잠시 후 다시 시도해주세요.'),
       );
     }
-  };
+  }, [needsSyncRetry]);
 
   const completeOAuthRoundTrip = async (code: string, stateToken: string) => {
     setErrorMessage(null);
@@ -307,7 +306,7 @@ export function BankConnectionScreen() {
 
     hasAutoStartedRef.current = true;
     void beginOAuth();
-  }, [onboardingStatus]);
+  }, [beginOAuth, onboardingStatus]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
