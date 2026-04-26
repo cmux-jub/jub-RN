@@ -1,10 +1,26 @@
+import { useEffect } from 'react';
+
 import { useRouter } from 'expo-router';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '@/theme/colors';
 
+const ARCHIVE_ROUTE = '/insights/archive' as never;
+const BACK_ICON = '\u2039';
+const CHECK_MARK = '\u2713';
+
 export function RetrospectiveCompletedScreen() {
   const router = useRouter();
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      router.replace(ARCHIVE_ROUTE);
+    }, 3000);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [router]);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -19,8 +35,13 @@ export function RetrospectiveCompletedScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" hitSlop={12} onPress={handleBack} style={styles.backButton}>
-            <Text style={styles.backIcon}>‹</Text>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={handleBack}
+            style={styles.backButton}
+          >
+            <Text style={styles.backIcon}>{BACK_ICON}</Text>
           </Pressable>
           <Text style={styles.headerTitle}>행복 지출 분석</Text>
           <View style={styles.headerSpacer} />
@@ -28,7 +49,7 @@ export function RetrospectiveCompletedScreen() {
 
         <View style={styles.content}>
           <View style={styles.checkWrap}>
-            <Text style={styles.checkMark}>✓</Text>
+            <Text style={styles.checkMark}>{CHECK_MARK}</Text>
           </View>
 
           <View style={styles.copyBlock}>
