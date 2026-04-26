@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
-import { resolvePostAuthRoute } from '@/features/auth/utils/authFlow';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
@@ -21,6 +20,7 @@ const FIGMA_SCREEN_HEIGHT = 852;
 const CONTENT_TOP_RATIO = 328 / FIGMA_SCREEN_HEIGHT;
 const SPINNER_DURATION_MS = 1200;
 const COMPLETE_HOLD_DURATION_MS = 1000;
+const POST_SIGN_UP_ROUTE = '/insights' as never;
 
 const COPY = {
   title: '\uD68C\uC6D0\uAC00\uC785 \uC644\uB8CC!',
@@ -33,7 +33,7 @@ const COPY = {
 export function SignUpCompleteScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
-  const { onboardingStatus, clearSignUpDraft } = useAuthStore();
+  const clearSignUpDraft = useAuthStore((state) => state.clearSignUpDraft);
   const rotation = useRef(new Animated.Value(0)).current;
   const loaderOpacity = useRef(new Animated.Value(1)).current;
   const checkOpacity = useRef(new Animated.Value(0)).current;
@@ -41,9 +41,10 @@ export function SignUpCompleteScreen() {
   const textOpacity = useRef(new Animated.Value(0)).current;
   const textTranslateY = useRef(new Animated.Value(8)).current;
   const rotationLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
     rotationLoopRef.current = Animated.loop(
       Animated.timing(rotation, {
         toValue: 1,
@@ -55,7 +56,7 @@ export function SignUpCompleteScreen() {
 
     rotationLoopRef.current.start();
 
-    timersRef.current.push(
+    timers.push(
       setTimeout(() => {
         rotationLoopRef.current?.stop();
 
@@ -100,29 +101,22 @@ export function SignUpCompleteScreen() {
       }, SPINNER_DURATION_MS),
     );
 
-    timersRef.current.push(
+    timers.push(
       setTimeout(() => {
         clearSignUpDraft();
-
-        if (!onboardingStatus) {
-          router.replace('/login' as never);
-          return;
-        }
-
-        router.replace(resolvePostAuthRoute(onboardingStatus) as never);
+        router.replace(POST_SIGN_UP_ROUTE);
       }, SPINNER_DURATION_MS + COMPLETE_HOLD_DURATION_MS + 350),
     );
 
     return () => {
       rotationLoopRef.current?.stop();
-      timersRef.current.forEach(clearTimeout);
+      timers.forEach(clearTimeout);
     };
   }, [
     checkOpacity,
     checkScale,
     clearSignUpDraft,
     loaderOpacity,
-    onboardingStatus,
     rotation,
     router,
     textOpacity,

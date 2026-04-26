@@ -11,6 +11,8 @@ const homeIcon = require('../../../../assets/images/tabIcons/home.png');
 const aiAdviceIcon = require('../../../../assets/images/tabIcons/explore.png');
 
 const CONNECT_BANK_ROUTE = '/onboarding/connect-bank' as never;
+const HOME_ROUTE = '/insights' as never;
+const MAIN_CHATBOT_ROUTE = '/chatbot/demo-session' as never;
 const TAB_BAR_HEIGHT = 90;
 const SCREEN_HORIZONTAL_PADDING = 20;
 const SECTION_GAP = 24;
@@ -48,6 +50,14 @@ export function InsightsOverviewScreen() {
 
   const handleConnectBank = () => {
     router.push(CONNECT_BANK_ROUTE);
+  };
+
+  const handleHomePress = () => {
+    router.replace(HOME_ROUTE);
+  };
+
+  const handleChatPress = () => {
+    router.push(MAIN_CHATBOT_ROUTE);
   };
 
   return (
@@ -147,8 +157,13 @@ export function InsightsOverviewScreen() {
 
       <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <View style={styles.tabBarRow}>
-          <BottomTab icon={homeIcon} isActive label="홈" />
-          <BottomTab icon={aiAdviceIcon} isActive={false} label="AI 조언" />
+          <BottomTab icon={homeIcon} isActive label="홈" onPress={handleHomePress} />
+          <BottomTab
+            icon={aiAdviceIcon}
+            isActive={false}
+            label="AI 조언"
+            onPress={handleChatPress}
+          />
         </View>
       </View>
     </View>
@@ -202,11 +217,18 @@ type BottomTabProps = {
   label: string;
   isActive: boolean;
   icon: ImageSourcePropType;
+  onPress: () => void;
 };
 
-function BottomTab({ label, isActive, icon }: BottomTabProps) {
+function BottomTab({ label, isActive, icon, onPress }: BottomTabProps) {
   return (
-    <View style={styles.bottomTab}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.bottomTab, pressed && styles.bottomTabPressed]}
+    >
       <View style={styles.bottomTabIconWrap}>
         <Image
           accessible={false}
@@ -226,7 +248,7 @@ function BottomTab({ label, isActive, icon }: BottomTabProps) {
       >
         {label}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -724,10 +746,14 @@ const styles = StyleSheet.create({
     gap: 80,
   },
   bottomTab: {
-    width: 48,
+    width: 64,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    paddingVertical: 4,
+  },
+  bottomTabPressed: {
+    opacity: 0.7,
   },
   bottomTabIconWrap: {
     width: 32,
