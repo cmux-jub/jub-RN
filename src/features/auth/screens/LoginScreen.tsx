@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Image,
@@ -43,12 +43,14 @@ export function LoginScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const setSession = useAuthStore((state) => state.setSession);
+  const passwordInputRef = useRef<TextInput>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalizedEmail = email.trim();
+  const hasSubmitError = submitError !== null;
   const canSubmit = useMemo(
     () => EMAIL_PATTERN.test(normalizedEmail) && password.length > 0 && !isSubmitting,
     [normalizedEmail, password, isSubmitting],
@@ -96,6 +98,22 @@ export function LoginScreen() {
     router.push('/signup/email' as never);
   };
 
+  const handleEmailChange = (value: string) => {
+    if (submitError) {
+      setSubmitError(null);
+    }
+
+    setEmail(value);
+  };
+
+  const handlePasswordChange = (value: string) => {
+    if (submitError) {
+      setSubmitError(null);
+    }
+
+    setPassword(value);
+  };
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -105,7 +123,6 @@ export function LoginScreen() {
         <Image
           accessibilityIgnoresInvertColors
           accessible={false}
-          pointerEvents="none"
           resizeMode="contain"
           source={loginHeroOrb}
           style={[styles.heroOrb, { top: heroTop }]}
@@ -128,10 +145,12 @@ export function LoginScreen() {
               autoComplete="email"
               autoCorrect={false}
               keyboardType="email-address"
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
+              onSubmitEditing={() => passwordInputRef.current?.focus()}
               placeholder={COPY.email}
               placeholderTextColor={colors.gray400}
-              style={styles.input}
+              returnKeyType="next"
+              style={[styles.input, hasSubmitError && styles.inputError]}
               textContentType="emailAddress"
               value={email}
             />
@@ -142,11 +161,16 @@ export function LoginScreen() {
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
-              onChangeText={setPassword}
+              onChangeText={handlePasswordChange}
+              onSubmitEditing={() => {
+                void handleLogin();
+              }}
               placeholder={COPY.password}
               placeholderTextColor={colors.gray400}
+              ref={passwordInputRef}
+              returnKeyType="done"
               secureTextEntry
-              style={styles.input}
+              style={[styles.input, hasSubmitError && styles.inputError]}
               textContentType="password"
               value={password}
             />
@@ -255,6 +279,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
   },
+  inputError: {
+    borderColor: colors.red300,
+  },
   forgotPasswordWrap: {
     alignSelf: 'stretch',
     alignItems: 'flex-end',
@@ -266,7 +293,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   statusMessage: {
-    color: colors.gray700,
+    color: colors.red300,
     fontSize: 13,
     lineHeight: 18,
   },

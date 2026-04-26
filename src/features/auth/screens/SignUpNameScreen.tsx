@@ -49,6 +49,7 @@ export function SignUpNameScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const normalizedName = nickname.trim();
+  const hasSubmitError = submitError !== null;
   const canSubmit = normalizedName.length > 0 && !isSubmitting;
   const navTop = Math.max(44, Math.round(height * NAV_TOP_RATIO));
   const headerTop = Math.max(108, Math.round(height * HEADER_TOP_RATIO));
@@ -110,6 +111,14 @@ export function SignUpNameScreen() {
     router.replace('/login' as never);
   };
 
+  const handleNicknameChange = (value: string) => {
+    if (submitError) {
+      setSubmitError(null);
+    }
+
+    setNickname(value);
+  };
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -142,10 +151,14 @@ export function SignUpNameScreen() {
           <Text style={styles.fieldLabel}>{COPY.label}</Text>
           <TextInput
             autoCapitalize="words"
-            onChangeText={setNickname}
+            onChangeText={handleNicknameChange}
+            onSubmitEditing={() => {
+              void handleSubmit();
+            }}
             placeholder={COPY.label}
             placeholderTextColor={colors.gray400}
-            style={styles.input}
+            returnKeyType="done"
+            style={[styles.input, hasSubmitError && styles.inputError]}
             textContentType="name"
             value={nickname}
           />
@@ -269,8 +282,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
   },
+  inputError: {
+    borderColor: colors.red300,
+  },
   statusMessage: {
-    color: colors.gray700,
+    color: colors.red300,
     fontSize: 13,
     lineHeight: 18,
   },

@@ -12,7 +12,7 @@ export function resolvePostAuthRoute(onboardingStatus: OnboardingStatus) {
     case 'NEEDS_LABELING':
       return '/onboarding/labeling';
     case 'READY':
-      return '/chatbot';
+      return '/insights';
     default:
       return '/login';
   }

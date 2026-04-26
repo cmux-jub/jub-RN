@@ -1,5 +1,12 @@
 export const colors = {
   mint500: '#79B4A2',
+  mint400: '#36E2AD',
+  mint100: '#CDFBE3',
+  yellow300: '#F1E272',
+  yellow500: '#E6B64E',
+  red100: '#FBCDCD',
+  red300: '#F96464',
+  green500: '#0BB939',
   black: '#000000',
   white: '#FFFFFF',
   gray50: '#FAFAFA',

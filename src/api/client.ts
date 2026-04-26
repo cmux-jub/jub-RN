@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosHeaders } from 'axios';
 
 import { useAuthStore } from '@/store/authStore';
 
@@ -21,15 +21,13 @@ apiClient.interceptors.request.use((config) => {
     return config;
   }
 
-  if (typeof config.headers?.set === 'function') {
-    config.headers.set('Authorization', `Bearer ${accessToken}`);
-    return config;
-  }
+  const headers =
+    config.headers instanceof AxiosHeaders
+      ? config.headers
+      : AxiosHeaders.from(config.headers);
 
-  config.headers = {
-    ...config.headers,
-    Authorization: `Bearer ${accessToken}`,
-  };
+  headers.set('Authorization', `Bearer ${accessToken}`);
+  config.headers = headers;
 
   return config;
 });

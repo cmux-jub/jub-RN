@@ -103,8 +103,10 @@ export function SignUpEmailScreen() {
             autoCorrect={false}
             keyboardType="email-address"
             onChangeText={setEmail}
+            onSubmitEditing={handleNext}
             placeholder={COPY.label}
             placeholderTextColor={colors.gray400}
+            returnKeyType="done"
             style={styles.input}
             textContentType="emailAddress"
             value={email}

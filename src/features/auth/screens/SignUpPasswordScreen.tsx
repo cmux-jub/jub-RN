@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   KeyboardAvoidingView,
@@ -39,6 +39,7 @@ export function SignUpPasswordScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   const { signUpDraft, updateSignUpDraft } = useAuthStore();
+  const passwordConfirmInputRef = useRef<TextInput>(null);
   const [password, setPassword] = useState(signUpDraft.password);
   const [passwordConfirm, setPasswordConfirm] = useState('');
 
@@ -110,8 +111,10 @@ export function SignUpPasswordScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={setPassword}
+              onSubmitEditing={() => passwordConfirmInputRef.current?.focus()}
               placeholder={COPY.password}
               placeholderTextColor={colors.gray400}
+              returnKeyType="next"
               secureTextEntry
               style={styles.input}
               textContentType="newPassword"
@@ -125,8 +128,11 @@ export function SignUpPasswordScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={setPasswordConfirm}
+              onSubmitEditing={handleNext}
               placeholder={COPY.passwordConfirm}
               placeholderTextColor={colors.gray400}
+              ref={passwordConfirmInputRef}
+              returnKeyType="done"
               secureTextEntry
               style={styles.input}
               textContentType="password"
