@@ -1,0 +1,12 @@
+Error: listen EADDRINUSE: address already in use :::8082
+Error: listen EADDRINUSE: address already in use :::8082
+    at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+    at listenInCluster (node:net:1965:12)
+    at Server.listen (node:net:2067:7)
+    at C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\runServer-fork.ts:156:16
+    at new Promise (<anonymous>)
+    at runServer (C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\runServer-fork.ts:151:10)
+    at instantiateMetroAsync (C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\instantiateMetro.ts:377:49)
+    at MetroBundlerDevServer.startImplementationAsync (C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\metro\MetroBundlerDevServer.ts:1248:69)
+    at MetroBundlerDevServer.startAsync (C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\BundlerDevServer.ts:174:18)
+    at DevServerManager.startAsync (C:\Users\user\Desktop\jub-RN\node_modules\expo\node_modules\@expo\cli\src\start\server\DevServerManager.ts:186:7)
