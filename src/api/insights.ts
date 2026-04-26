@@ -1,7 +1,20 @@
 import { apiClient } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
 import type { ApiResponse } from '@/api/types/common';
-import type { CategorySatisfactionResponseData, HappyPurchasesResponseData, SavedAmountPeriod, SavedAmountResponseData, ScoreTrendPeriod, ScoreTrendResponseData } from '@/api/types/insights';
+import type {
+  CategorySatisfactionResponseData,
+  HappyPurchasesResponseData,
+  MainInsightsResponseData,
+  SavedAmountPeriod,
+  SavedAmountResponseData,
+  ScoreTrendPeriod,
+  ScoreTrendResponseData,
+} from '@/api/types/insights';
+
+export async function fetchMainInsights() {
+  const { data } = await apiClient.get<ApiResponse<MainInsightsResponseData>>(endpoints.insights.main);
+  return data;
+}
 
 export async function fetchHappyPurchases() {
   const { data } = await apiClient.get<ApiResponse<HappyPurchasesResponseData>>(endpoints.insights.happyPurchases);

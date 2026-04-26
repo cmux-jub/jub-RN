@@ -13,10 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { signUp } from '@/api/auth';
-import {
-  DEFAULT_SIGN_UP_BIRTH_YEAR,
-  getAuthErrorMessage,
-} from '@/features/auth/utils/authFlow';
+import { getAuthErrorMessage } from '@/features/auth/utils/authFlow';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
@@ -77,7 +74,6 @@ export function SignUpNameScreen() {
         email: signUpDraft.email,
         password: signUpDraft.password,
         nickname: normalizedName,
-        birth_year: DEFAULT_SIGN_UP_BIRTH_YEAR,
       });
 
       if (!response.success) {

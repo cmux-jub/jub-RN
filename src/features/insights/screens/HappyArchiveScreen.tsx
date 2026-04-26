@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useRouter } from 'expo-router';
 import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { mockHappyPurchases } from '@/mocks/fixtures';
+import { fetchHappyPurchases } from '@/api/insights';
+import type { HappyPurchaseItem } from '@/api/types/insights';
 import { appEvents } from '@/services/tracking/events';
 import { track } from '@/services/tracking/tracker';
 import { colors } from '@/theme/colors';
@@ -13,20 +14,55 @@ const topChipIcon = require('../../../../assets/images/main/top-chip-icon.png');
 const CAKE_IMAGE_URI = 'https://www.figma.com/api/mcp/asset/4934a3ff-3e59-43b0-9726-f24313f3bc47';
 
 const CATEGORY_LABELS = {
-  IMMEDIATE: '식비',
+  IMMEDIATE: '즉시 소비',
   LASTING: '지속 소비',
   ESSENTIAL: '필수 소비',
 } as const;
 
+type ScreenState = 'loading' | 'success' | 'error';
+
 export function HappyArchiveScreen() {
   const router = useRouter();
-  const purchase = mockHappyPurchases.items[0] ?? null;
-  const noteLines = purchase?.text?.split('\n').filter((line) => line.trim().length > 0) ?? [];
+  const [screenState, setScreenState] = useState<ScreenState>('loading');
+  const [purchase, setPurchase] = useState<HappyPurchaseItem | null>(null);
+  const [itemCount, setItemCount] = useState(0);
 
   useEffect(() => {
-    track(appEvents.archiveViewed, {
-      item_count: mockHappyPurchases.items.length,
-    });
+    let isCancelled = false;
+
+    async function loadHappyPurchases() {
+      try {
+        const response = await fetchHappyPurchases();
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!response.success) {
+          setScreenState('error');
+          return;
+        }
+
+        const firstItem = response.data.items[0] ?? null;
+        setPurchase(firstItem);
+        setItemCount(response.data.items.length);
+        setScreenState('success');
+
+        track(appEvents.archiveViewed, {
+          item_count: response.data.items.length,
+        });
+      } catch {
+        if (!isCancelled) {
+          setScreenState('error');
+        }
+      }
+    }
+
+    void loadHappyPurchases();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   const handleBack = () => {
@@ -38,12 +74,38 @@ export function HappyArchiveScreen() {
     router.replace('/insights' as never);
   };
 
+  const noteLines = purchase?.text?.split('\n').filter((line) => line.trim().length > 0) ?? [];
+
+  if (screenState === 'loading') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>행복 소비를 불러오고 있어요.</Text>
+          <Text style={styles.emptyBody}>최근 기록된 행복 소비를 정리해서 보여드릴게요.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screenState === 'error') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>행복 소비를 불러오지 못했어요.</Text>
+          <Text style={styles.emptyBody}>잠시 후 다시 시도해주세요.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!purchase) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>아직 행복 소비 내역이 없어요</Text>
-          <Text style={styles.emptyBody}>행복 점수가 높은 소비가 쌓이면 여기서 바로 보여드릴게요.</Text>
+          <Text style={styles.emptyTitle}>아직 행복 소비 내역이 없어요.</Text>
+          <Text style={styles.emptyBody}>
+            만족도가 높은 소비가 쌓이면 여기에 바로 보여드릴게요.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -65,7 +127,7 @@ export function HappyArchiveScreen() {
 
         <View style={styles.topChip}>
           <Image accessible={false} resizeMode="contain" source={topChipIcon} style={styles.topChipIcon} />
-          <Text style={styles.topChipLabel}>나의 행복 소비내역</Text>
+          <Text style={styles.topChipLabel}>나의 행복 소비 내역</Text>
         </View>
 
         <View style={styles.card}>
@@ -79,11 +141,15 @@ export function HappyArchiveScreen() {
 
           <View style={styles.noteBlock}>
             <Text style={styles.noteLabel}>회고</Text>
-            {noteLines.map((line) => (
-              <Text key={line} style={styles.noteBody}>
-                {line}
-              </Text>
-            ))}
+            {noteLines.length > 0 ? (
+              noteLines.map((line) => (
+                <Text key={line} style={styles.noteBody}>
+                  {line}
+                </Text>
+              ))
+            ) : (
+              <Text style={styles.noteBodyMuted}>작성된 회고가 없어요.</Text>
+            )}
           </View>
         </View>
 
@@ -92,6 +158,8 @@ export function HappyArchiveScreen() {
           <View style={styles.paginationDot} />
           <View style={styles.paginationDot} />
         </View>
+
+        <Text style={styles.paginationCaption}>행복 소비 {itemCount}건 중 최근 기록</Text>
       </View>
     </SafeAreaView>
   );
@@ -225,6 +293,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 22,
   },
+  noteBodyMuted: {
+    color: colors.gray500,
+    fontSize: 16,
+    lineHeight: 22,
+  },
   pagination: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -243,6 +316,13 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.gray200,
+  },
+  paginationCaption: {
+    marginTop: 12,
+    color: colors.gray500,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   emptyState: {
     flex: 1,

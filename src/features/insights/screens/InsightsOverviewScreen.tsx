@@ -1,9 +1,15 @@
 import type { ImageSourcePropType } from 'react-native';
 
+import { useEffect, useMemo, useState } from 'react';
+
 import { useRouter } from 'expo-router';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { fetchCurrentUser } from '@/api/auth';
+import { fetchMainInsights } from '@/api/insights';
+import type { UserMe } from '@/api/types/auth';
+import type { MainInsightsResponseData } from '@/api/types/insights';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
@@ -24,15 +30,10 @@ const MAIN_CHATBOT_ROUTE = '/chatbot' as never;
 const TAB_BAR_HEIGHT = 90;
 
 const LINKED_HOME_CONTENT = {
-  userName: '김주현',
+  userName: '사용자',
   planLabel: 'Free Plan',
   happyPrompt: '내가 행복했던 소비 내역',
-  accountStatus: '전체 계좌와 연결 완료',
-  happyCategory: '외식비',
-  lastMonthSpend: 1_895_000,
-  lastMonthSpendDelta: '-12%',
-  lastMonthSaved: 240_000,
-  lastMonthSavedDelta: '+22%',
+  accountStatus: '전체 계좌 연결 완료',
   retrospectiveHeadline: '이번 주의 소비 내역을 다시 돌아보세요.',
   retrospectiveFooter: '구매 경험 되짚고 회고하기',
 } as const;
@@ -40,22 +41,136 @@ const LINKED_HOME_CONTENT = {
 const UNLINKED_HOME_CONTENT = {
   happyPrompt: '내가 행복했던 소비 내역',
   bankLinkTitle: '오픈뱅킹 연동하기',
-  bankLinkSubtitle: '최근 3개월 거래를 연결해서 소비 기록을 바로 불러와요.',
+  bankLinkSubtitle: '최근 3개월 거래를 연결해서 소비 기록을 바로 불러오세요.',
   accountStatus: '오픈뱅킹 연결이 필요해요',
-  happyMessage: '계좌를 연결하면 만족스러웠던 소비를 바로 모아드릴게요.',
+  happyMessage: '계좌를 연결하면 만족스러웠던 소비를 바로 모아 보여드릴게요.',
   retrospectiveHeadline: '이번 주의 소비를 회고하려면 계좌 연결을 먼저 완료해주세요.',
   retrospectiveFooter: '계좌 연결하고 회고 준비하기',
 } as const;
 
+type SummaryState = 'idle' | 'loading' | 'success' | 'error';
+
 export function InsightsOverviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const accessToken = useAuthStore((state) => state.accessToken);
   const onboardingStatus = useAuthStore((state) => state.onboardingStatus);
+  const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
   const signUpNickname = useAuthStore((state) => state.signUpDraft.nickname);
-  const isBankLinked = onboardingStatus === 'NEEDS_LABELING' || onboardingStatus === 'READY';
-  const trimmedNickname = signUpNickname.trim();
+  const [profile, setProfile] = useState<UserMe | null>(null);
+  const [mainSummary, setMainSummary] = useState<MainInsightsResponseData | null>(null);
+  const [summaryState, setSummaryState] = useState<SummaryState>('idle');
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadInsights() {
+      if (!accessToken) {
+        return;
+      }
+
+      let resolvedOnboardingStatus = onboardingStatus;
+
+      try {
+        const userResponse = await fetchCurrentUser();
+
+        if (!isCancelled && userResponse.success) {
+          setProfile(userResponse.data);
+          resolvedOnboardingStatus = userResponse.data.onboarding_status;
+
+          const trimmedNickname = userResponse.data.nickname.trim();
+
+          useAuthStore.setState((state) => ({
+            ...state,
+            onboardingStatus: userResponse.data.onboarding_status,
+            subscriptionTier: userResponse.data.subscription_tier,
+            signUpDraft: trimmedNickname
+              ? {
+                  ...state.signUpDraft,
+                  nickname: trimmedNickname,
+                }
+              : state.signUpDraft,
+          }));
+        }
+      } catch {
+        // Ignore profile sync failures here and keep store fallback values.
+      }
+
+      const isLinked =
+        resolvedOnboardingStatus === 'NEEDS_LABELING' || resolvedOnboardingStatus === 'READY';
+
+      if (!isLinked) {
+        if (!isCancelled) {
+          setMainSummary(null);
+          setSummaryState('idle');
+        }
+        return;
+      }
+
+      setSummaryState('loading');
+
+      try {
+        const summaryResponse = await fetchMainInsights();
+
+        if (isCancelled) {
+          return;
+        }
+
+        if (!summaryResponse.success) {
+          setMainSummary(null);
+          setSummaryState('error');
+          return;
+        }
+
+        setMainSummary(summaryResponse.data);
+        setSummaryState('success');
+      } catch {
+        if (!isCancelled) {
+          setMainSummary(null);
+          setSummaryState('error');
+        }
+      }
+    }
+
+    void loadInsights();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [accessToken, onboardingStatus]);
+
+  const effectiveOnboardingStatus = profile?.onboarding_status ?? onboardingStatus;
+  const isBankLinked =
+    effectiveOnboardingStatus === 'NEEDS_LABELING' || effectiveOnboardingStatus === 'READY';
+  const trimmedNickname = (profile?.nickname ?? signUpNickname).trim();
   const displayName =
     trimmedNickname.length > 0 ? trimmedNickname : LINKED_HOME_CONTENT.userName;
+  const planLabel = getPlanLabel(profile?.subscription_tier ?? subscriptionTier);
+
+  const happyInsightText = useMemo(() => {
+    if (!isBankLinked) {
+      return UNLINKED_HOME_CONTENT.happyMessage;
+    }
+
+    if (mainSummary?.top_happy_consumption.message) {
+      return mainSummary.top_happy_consumption.message;
+    }
+
+    if (summaryState === 'error') {
+      return '행복 소비 데이터를 불러오지 못했어요.';
+    }
+
+    return '행복 소비 데이터를 불러오고 있어요.';
+  }, [isBankLinked, mainSummary?.top_happy_consumption.message, summaryState]);
+
+  const monthlySpendAmount = isBankLinked && mainSummary
+    ? formatWon(mainSummary.monthly_spending.current_month_amount)
+    : '-';
+  const monthlySpendDelta = isBankLinked ? mainSummary?.monthly_spending.difference_percent_display : undefined;
+  const savedAmount = isBankLinked && mainSummary
+    ? formatWon(mainSummary.saved_amount_comparison.current_amount)
+    : '-';
+  const savedAmountDelta = isBankLinked ? mainSummary?.saved_amount_comparison.difference_percent_display : undefined;
 
   const handleConnectBank = () => {
     router.push(CONNECT_BANK_ROUTE);
@@ -104,7 +219,7 @@ export function InsightsOverviewScreen() {
           <View style={styles.profileRow}>
             <View style={styles.profileCopy}>
               <Text style={styles.profileName}>{displayName}</Text>
-              <Text style={styles.profilePlan}>{LINKED_HOME_CONTENT.planLabel}</Text>
+              <Text style={styles.profilePlan}>{planLabel}</Text>
             </View>
 
             <Image
@@ -160,9 +275,7 @@ export function InsightsOverviewScreen() {
                 <Text
                   style={isBankLinked ? styles.happyInsightText : styles.happyInsightTextDisabled}
                 >
-                  {isBankLinked
-                    ? `${displayName}님의 행복 소비는 ${LINKED_HOME_CONTENT.happyCategory} 지출입니다.`
-                    : UNLINKED_HOME_CONTENT.happyMessage}
+                  {happyInsightText}
                 </Text>
               </View>
 
@@ -183,23 +296,23 @@ export function InsightsOverviewScreen() {
 
             <View style={styles.metricCard}>
               <MetricRow
-                amountLabel={isBankLinked ? formatWon(LINKED_HOME_CONTENT.lastMonthSpend) : '-'}
-                deltaLabel={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSpendDelta : undefined}
+                amountLabel={monthlySpendAmount}
+                deltaLabel={monthlySpendDelta}
                 deltaTone="negative"
-                dimmed={!isBankLinked}
+                dimmed={!isBankLinked || summaryState === 'loading'}
                 icon={spendTrendDownIcon}
-                label="지난달 소비 내역"
+                label="이번달 소비 내역"
               />
 
               <View style={styles.metricDivider} />
 
               <MetricRow
-                amountLabel={isBankLinked ? formatWon(LINKED_HOME_CONTENT.lastMonthSaved) : '-'}
-                deltaLabel={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSavedDelta : undefined}
+                amountLabel={savedAmount}
+                deltaLabel={savedAmountDelta}
                 deltaTone="positive"
-                dimmed={!isBankLinked}
+                dimmed={!isBankLinked || summaryState === 'loading'}
                 icon={spendTrendUpIcon}
-                label="지난달 아낀 금액"
+                label="이번달 아낀 금액"
               />
             </View>
           </View>
@@ -388,6 +501,14 @@ function BottomTab({ label, isActive, icon, onPress }: BottomTabProps) {
 
 function formatWon(amount: number) {
   return `${amount.toLocaleString('ko-KR')}원`;
+}
+
+function getPlanLabel(tier: UserMe['subscription_tier'] | null | undefined) {
+  if (tier === 'PAID') {
+    return 'Paid Plan';
+  }
+
+  return 'Free Plan';
 }
 
 const styles = StyleSheet.create({

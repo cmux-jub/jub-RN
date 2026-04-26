@@ -1,8 +1,44 @@
 import type { Category } from '@/api/types/common';
 
+export type MonthlySpendingComparison = {
+  current_month_amount: number;
+  previous_month_amount: number;
+  difference_amount: number;
+  difference_percent: number | null;
+  difference_display: string;
+  difference_percent_display: string;
+};
+
+export type AmountComparison = {
+  current_amount: number;
+  previous_amount: number;
+  difference_amount: number;
+  difference_percent: number | null;
+  difference_display: string;
+  difference_percent_display: string;
+};
+
+export type TopHappyConsumption = {
+  message: string;
+  category: Category | null;
+  category_name: string | null;
+  avg_score: number | null;
+  total_amount: number;
+  count: number;
+};
+
+export type MainInsightsResponseData = {
+  monthly_spending: MonthlySpendingComparison;
+  saved_amount_comparison: AmountComparison;
+  top_happy_consumption: TopHappyConsumption;
+  saved_amount: number;
+  saved_count: number;
+};
+
 export type HappyPurchaseItem = {
   transaction_id: string;
   amount: number;
+  related_total_amount: number;
   merchant: string;
   category: Category;
   occurred_at: string;

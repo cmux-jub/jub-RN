@@ -4,7 +4,6 @@ export type SignUpRequest = {
   email: string;
   password: string;
   nickname: string;
-  birth_year: number;
 };
 
 export type LoginRequest = {

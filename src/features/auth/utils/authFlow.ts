@@ -2,9 +2,6 @@ import { isAxiosError } from 'axios';
 
 import type { OnboardingStatus } from '@/api/types/common';
 
-// API requires birth_year, but the current sign-up design does not collect it yet.
-export const DEFAULT_SIGN_UP_BIRTH_YEAR = 1998;
-
 export function resolvePostAuthRoute(onboardingStatus: OnboardingStatus) {
   switch (onboardingStatus) {
     case 'NEEDS_BANK_LINK':

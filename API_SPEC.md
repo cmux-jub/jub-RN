@@ -1,1792 +1,1067 @@
-# Movra API 명세서
+# Aftertaste Backend API Specification
 
-> 최종 갱신: 2026-04-24
-> 기준: 실제 구현 코드베이스 (컨트롤러 + DTO 기반)
+> REST + WebSocket API 명세. 모든 REST 엔드포인트의 기본 경로는 `/v1`입니다.
 
-## 공통 사항
+---
+
+## 0. 공통 규칙
+
+### Base URL
+
+- Local: `http://localhost:3000/v1`
+- Production 예시: `https://api.aftertaste.app/v1`
+- WebSocket: `/v1/ws/chatbot/{session_id}?token={access_token}`
 
 ### 인증
 
-- **방식**: JWT Bearer Token
-- **헤더**: `Authorization: Bearer {accessToken}`
-- **비인증 엔드포인트**: `/auth/signup`, `/auth/login`, `/auth/oauth/profile-setup`, `/auth/reissue`, `/ws/**`
-- 그 외 모든 요청은 인증 필수
+인증이 필요한 REST API는 HTTP Header에 access token을 전달합니다.
 
-### 공통 응답 형식
+```http
+Authorization: Bearer {access_token}
+```
 
-- 성공 시: HTTP 200 + JSON Body (또는 Body 없음)
-- 실패 시: ErrorCode 기반 응답
+WebSocket은 쿼리 파라미터로 access token을 전달합니다.
+
+```text
+wss://api.aftertaste.app/v1/ws/chatbot/{session_id}?token={access_token}
+```
+
+### 공통 응답
+
+성공:
 
 ```json
 {
-  "status": 400,
-  "message": "잘못된 요청입니다."
+  "success": true,
+  "data": {},
+  "error": null
 }
 ```
 
-### ID 형식
+실패:
 
-- 모든 ID는 `UUID` (v4) 형식
-
-### 날짜/시간 형식
-
-| 타입 | 형식 | 예시 |
-|------|------|------|
-| `LocalDate` | `yyyy-MM-dd` | `2026-04-24` |
-| `LocalTime` | `HH:mm:ss` | `09:30:00` |
-| `LocalDateTime` | `yyyy-MM-ddTHH:mm:ss` | `2026-04-24T09:30:00` |
-| `Instant` | ISO-8601 UTC | `2026-04-24T00:30:00Z` |
-
----
-
-## 1. Auth (인증)
-
-> BC: `account` / Controller: `AuthController`
-> Base Path: `/auth`
-
----
-
-### 1-1. 회원가입
-
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "INVALID_INPUT",
+    "message": "요청 형식이 올바르지 않습니다"
+  }
+}
 ```
+
+### 주요 Enum
+
+`Category`
+
+- `IMMEDIATE`: 즉시 소비. 배달, 카페, 편의점 등
+- `LASTING`: 지속 소비. 강의, 책, 구독, 전자제품 등
+- `ESSENTIAL`: 필수 소비. 교통, 통신, 공과금 등
+
+`ChatbotDecision`
+
+- `BUY`
+- `RECONSIDER`
+- `SKIP`
+
+`OnboardingStatus`
+
+- `NEEDS_BANK_LINK`
+- `NEEDS_LABELING`
+- `READY`
+
+`SubscriptionTier`
+
+- `FREE_FULL`
+- `FREE_LIMITED`
+- `PAID`
+
+---
+
+## 1. 공통 데이터 구조
+
+### 1.1 금액 비교
+
+소비 금액, 아낀 금액 비교에 공통으로 사용합니다.
+
+```json
+{
+  "current_amount": 200000,
+  "previous_amount": 350000,
+  "difference_amount": -150000,
+  "difference_percent": -42.9,
+  "difference_display": "-150000",
+  "difference_percent_display": "-42.9%"
+}
+```
+
+`difference_percent`는 `previous_amount`가 0이면 `null`, 표시값은 `N/A`입니다.
+
+### 1.2 소비 비교
+
+주간 소비 비교처럼 “덜 쓴 금액”을 함께 보여줄 때 사용합니다.
+
+```json
+{
+  "current_amount": 200000,
+  "previous_amount": 350000,
+  "difference_amount": -150000,
+  "difference_percent": -42.9,
+  "difference_display": "-150000",
+  "difference_percent_display": "-42.9%",
+  "saved_amount": 150000
+}
+```
+
+### 1.3 가장 높은 행복 소비
+
+```json
+{
+  "message": "tester님의 행복 소비는 지속 소비 지출입니다.",
+  "category": "LASTING",
+  "category_name": "지속 소비",
+  "avg_score": 5.0,
+  "total_amount": 89000,
+  "count": 1
+}
+```
+
+행복 소비 데이터가 없으면 `category`, `category_name`, `avg_score`는 `null`입니다.
+
+### 1.4 행복 소비 아카이브 항목
+
+```json
+{
+  "transaction_id": "t_xxx",
+  "amount": 89000,
+  "related_total_amount": 178000,
+  "merchant": "유니클로",
+  "category": "LASTING",
+  "occurred_at": "2026-04-20T12:00:00Z",
+  "score": 5,
+  "text": "오래 입을 수 있어서 만족스러웠음"
+}
+```
+
+- `occurred_at`: 지출 날짜
+- `related_total_amount`: 같은 행복 소비 카테고리의 관련 총 지출 금액
+- `text`: 회고/피드백 텍스트
+
+---
+
+## 2. 인증 / 사용자
+
+### 2.1 회원가입
+
+```http
 POST /auth/signup
-Content-Type: multipart/form-data
 ```
 
-**Request** (form-data):
+요청:
 
-| 필드 | 타입 | 필수 | 제약 | 설명 |
-|------|------|------|------|------|
-| `email` | String | O | 이메일 형식, max 255 | 이메일 |
-| `accountId` | String | O | max 30 | 계정 ID |
-| `profileName` | String | O | max 20 | 프로필 이름 |
-| `profileImage` | MultipartFile | O | 비어있지 않은 파일 | 프로필 이미지 |
-| `password` | String | O | 8~20자 | 비밀번호 |
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `DUPLICATE_ACCOUNT_ID` (409): 이미 존재하는 계정 ID
-- `DUPLICATE_EMAIL` (409): 이미 존재하는 이메일
-
----
-
-### 1-2. 로그인
-
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "nickname": "tester"
+}
 ```
+
+응답 `201`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "u_xxx",
+    "access_token": "jwt...",
+    "refresh_token": "jwt...",
+    "onboarding_status": "NEEDS_BANK_LINK"
+  },
+  "error": null
+}
+```
+
+### 2.2 로그인
+
+```http
 POST /auth/login
-Content-Type: application/json
 ```
 
-**Request**:
+요청:
 
 ```json
 {
-  "accountId": "string (max 30)",
-  "password": "string (8~20)"
+  "email": "user@example.com",
+  "password": "password123"
 }
 ```
 
-**Response**:
+응답 `200`: 회원가입 응답과 동일합니다.
+
+### 2.3 토큰 갱신
+
+```http
+POST /auth/refresh
+```
+
+요청:
 
 ```json
 {
-  "accessToken": "string",
-  "refreshToken": "string"
+  "refresh_token": "jwt..."
 }
 ```
 
-**에러**:
-- `ACCOUNT_NOT_FOUND` (404): 계정 ID를 찾을 수 없음
-- `PASSWORD_MISMATCH` (401): 비밀번호 불일치
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "access_token": "jwt...",
+    "refresh_token": "jwt..."
+  },
+  "error": null
+}
+```
+
+### 2.4 내 정보 조회
+
+```http
+GET /users/me
+```
+
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "u_xxx",
+    "email": "user@example.com",
+    "nickname": "tester",
+    "onboarding_status": "READY",
+    "subscription_tier": "FREE_FULL",
+    "chatbot_usage_count": 3,
+    "created_at": "2026-04-26T10:00:00Z"
+  },
+  "error": null
+}
+```
 
 ---
 
-### 1-3. OAuth 프로필 설정
+## 3. 오픈뱅킹 연동
 
+### 3.1 OAuth 시작
+
+```http
+POST /banking/oauth/start
 ```
-POST /auth/oauth/profile-setup?pendingToken={pendingToken}
-Content-Type: multipart/form-data
-```
 
-**Query Parameter**:
-
-| 필드 | 타입 | 필수 | 설명 |
-|------|------|------|------|
-| `pendingToken` | String | O | OAuth 인증 후 발급된 임시 토큰 |
-
-**Request** (form-data):
-
-| 필드 | 타입 | 필수 | 제약 | 설명 |
-|------|------|------|------|------|
-| `accountId` | String | O | max 30 | 계정 ID |
-| `profileName` | String | O | max 20 | 프로필 이름 |
-| `profileImage` | MultipartFile | O | 비어있지 않은 파일 | 프로필 이미지 |
-| `password` | String | O | 8~20자 | 비밀번호 |
-
-**Response**:
+요청:
 
 ```json
 {
-  "accessToken": "string",
-  "refreshToken": "string",
-  "isProfileCompleted": true
+  "provider": "OPEN_BANKING_KR"
+}
+```
+
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "auth_url": "https://...",
+    "state_token": "state_xxx"
+  },
+  "error": null
+}
+```
+
+### 3.2 OAuth 콜백
+
+```http
+POST /banking/oauth/callback
+```
+
+요청:
+
+```json
+{
+  "code": "authorization-code",
+  "state_token": "state_xxx"
+}
+```
+
+### 3.3 거래 동기화
+
+```http
+POST /banking/sync
+```
+
+신규 가입자는 오픈뱅킹 동기화 후 최근 3개월 거래를 기반으로 온보딩을 진행합니다.
+
+요청:
+
+```json
+{
+  "from_date": "2026-01-26",
+  "to_date": "2026-04-26"
+}
+```
+
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "synced_count": 247,
+    "new_count": 12,
+    "sync_id": "s_xxx"
+  },
+  "error": null
 }
 ```
 
 ---
 
-### 1-4. 토큰 재발급
+## 4. 메인 페이지
 
-```
-POST /auth/reissue
-Content-Type: application/json
+### 4.1 메인 요약
+
+```http
+GET /insights/main
 ```
 
-**Request**:
+반환 정보:
+
+- 이번달 소비 금액
+- 지난달 소비 금액
+- 지난달 대비 소비 증감액과 `+/- %`
+- 이번달 아낀 금액
+- 지난달 아낀 금액
+- 지난달 대비 아낀 금액 증감액과 `+/- %`
+- 가장 높은 행복 소비 문장
+
+응답 `200`:
 
 ```json
 {
-  "refreshToken": "string"
+  "success": true,
+  "data": {
+    "monthly_spending": {
+      "current_month_amount": 100000,
+      "previous_month_amount": 200000,
+      "difference_amount": -100000,
+      "difference_percent": -50.0,
+      "difference_display": "-100000",
+      "difference_percent_display": "-50.0%"
+    },
+    "saved_amount_comparison": {
+      "current_amount": 1500000,
+      "previous_amount": 500000,
+      "difference_amount": 1000000,
+      "difference_percent": 200.0,
+      "difference_display": "+1000000",
+      "difference_percent_display": "+200.0%"
+    },
+    "top_happy_consumption": {
+      "message": "tester님의 행복 소비는 지속 소비 지출입니다.",
+      "category": "LASTING",
+      "category_name": "지속 소비",
+      "avg_score": 5.0,
+      "total_amount": 89000,
+      "count": 1
+    },
+    "saved_amount": 1500000,
+    "saved_count": 1
+  },
+  "error": null
 }
 ```
 
-**Response**:
+---
+
+## 5. 거래
+
+### 5.1 거래 목록 조회
+
+```http
+GET /transactions
+```
+
+쿼리:
+
+- `from_date`: `YYYY-MM-DD`, optional
+- `to_date`: `YYYY-MM-DD`, optional
+- `category`: `IMMEDIATE | LASTING | ESSENTIAL`, optional
+- `cursor`: optional
+- `limit`: default `20`, max `100`
+
+기본 동작:
+
+- 날짜를 생략하면 최근 3개월 거래를 조회합니다.
+- 응답의 `spending_comparison`은 이번달과 지난달 소비 비교입니다.
+
+응답 `200`:
 
 ```json
 {
-  "accessToken": "string",
-  "refreshToken": "string"
-}
-```
-
-**에러**:
-- `REFRESH_TOKEN_NOT_FOUND` (401): 리프레시 토큰을 찾을 수 없음
-- `EXPIRED_JWT` (401): 토큰 만료
-
----
-
-## 2. Daily Plan (일일 계획)
-
-> BC: `planning` / Controller: `DailyPlanController`
-> Base Path: `/daily-plans`
-
----
-
-### 2-1. 일일 계획 생성
-
-```
-POST /daily-plans
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "planDate": "2026-04-24"
-}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `DAILY_PLAN_ALREADY_EXISTS` (409): 이미 존재하는 일일 계획
-
----
-
-### 2-2. 오늘 일일 계획 조회
-
-```
-GET /daily-plans/today
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "dailyPlanId": "uuid",
-  "planDate": "2026-04-24",
-  "tasks": [
-    {
-      "taskId": "uuid",
-      "content": "string",
-      "completed": false,
-      "taskType": "GENERAL",
-      "topPicked": true,
-      "topPickDetail": {
-        "estimatedMinutes": 30,
-        "memo": "string"
+  "success": true,
+  "data": {
+    "transactions": [
+      {
+        "transaction_id": "t_xxx",
+        "amount": 6500,
+        "merchant": "스타벅스",
+        "category": "IMMEDIATE",
+        "category_confidence": 0.92,
+        "occurred_at": "2026-04-25T19:30:00Z",
+        "satisfaction_score": null,
+        "satisfaction_text": null,
+        "labeled_at": null
       }
+    ],
+    "next_cursor": "t_next",
+    "spending_comparison": {
+      "current_month_amount": 420000,
+      "previous_month_amount": 380000,
+      "difference_amount": 40000,
+      "difference_percent": 10.5,
+      "difference_display": "+40000",
+      "difference_percent_display": "+10.5%"
     }
-  ],
-  "morningTasks": [
+  },
+  "error": null
+}
+```
+
+### 5.2 거래 상세 조회
+
+```http
+GET /transactions/{transaction_id}
+```
+
+### 5.3 거래 카테고리 수정
+
+```http
+PATCH /transactions/{transaction_id}/category
+```
+
+요청:
+
+```json
+{
+  "category": "LASTING"
+}
+```
+
+### 5.4 거래 만족도 직접 입력
+
+```http
+POST /transactions/{transaction_id}/satisfaction
+```
+
+요청:
+
+```json
+{
+  "score": 4,
+  "text": "다시 봐도 만족스러웠음"
+}
+```
+
+`score`는 필수, `text`는 선택입니다.
+
+---
+
+## 6. 신규 가입 온보딩
+
+신규 가입자는 로그인 후 오픈뱅킹으로 거래를 동기화한 뒤 최근 3개월 지출 데이터를 기반으로 온보딩 피드백을 작성합니다.
+
+요구사항:
+
+- AI가 최근 3개월 지출 내용을 분석해 질문을 생성합니다.
+- 질문은 5~10개 범위입니다. 거래 데이터가 부족하면 가능한 질문만 반환될 수 있습니다.
+- 각 질문은 1~5점 필수, 텍스트 선택입니다.
+- 답변 제출 후 행복 소비 아카이브를 생성합니다.
+- 저장된 만족도 정보는 구매 전 상담 챗봇 컨텍스트에 반영됩니다.
+
+### 6.1 온보딩 질문 조회
+
+```http
+GET /onboarding/questions
+```
+
+쿼리:
+
+- `limit`: default `10`, min `5`, max `10`
+
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "labeled_count": 0,
+    "required_count": 5,
+    "question_count": 5,
+    "min_question_count": 5,
+    "max_question_count": 10,
+    "questions": [
+      {
+        "question_id": "oq_t_xxx",
+        "transaction": {
+          "transaction_id": "t_xxx",
+          "amount": 89000,
+          "merchant": "유니클로",
+          "category": "LASTING",
+          "occurred_at": "2026-04-20T12:00:00Z"
+        },
+        "selection_reason": "LARGE_AMOUNT",
+        "pattern_summary": "기간 내 큰 지출에 해당하는 소비입니다.",
+        "question": {
+          "title": "큰 금액이었던 이 소비는 다시 봐도 만족스러웠나요?",
+          "body": "유니클로에서 쓴 89,000원이 금액만큼의 만족이나 효용을 남겼는지 1~5점으로 평가해 주세요.",
+          "answer_type": "SCORE_WITH_TEXT",
+          "score_scale": {
+            "min": 1,
+            "max": 5,
+            "min_label": "금액 대비 아쉬웠어요",
+            "max_label": "충분히 만족했어요"
+          },
+          "required": true
+        }
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+### 6.2 온보딩 답변 제출
+
+```http
+POST /onboarding/feedback
+```
+
+요청:
+
+```json
+{
+  "answers": [
     {
-      "taskId": "uuid",
-      "content": "string",
-      "completed": false,
-      "taskType": "MORNING",
-      "topPicked": false,
-      "topPickDetail": null
+      "question_id": "oq_t_xxx",
+      "transaction_id": "t_xxx",
+      "score": 5,
+      "text": "오래 입을 수 있어서 만족스러웠음"
     }
   ]
 }
 ```
 
-**TaskType enum**: `GENERAL`, `MORNING`
-
----
-
-### 2-3. 날짜별 일일 계획 조회
-
-```
-GET /daily-plans?planDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**: 2-2와 동일
-
-**에러**:
-- `DAILY_PLAN_NOT_FOUND` (404): 일일 계획을 찾을 수 없음
-
----
-
-## 3. Mind Sweep (생각 정리)
-
-> BC: `planning` / Controller: `MindSweepController`
-> Base Path: `/daily-plans/{dailyPlanId}/mind-sweeps`
-
----
-
-### 3-1. Mind Sweep 태스크 목록 조회
-
-```
-GET /daily-plans/{dailyPlanId}/mind-sweeps
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "taskId": "uuid",
-    "content": "string",
-    "completed": false
-  }
-]
-```
-
----
-
-### 3-2. Mind Sweep 태스크 추가
-
-```
-POST /daily-plans/{dailyPlanId}/mind-sweeps
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
+응답 `200`:
 
 ```json
 {
-  "content": "string (max 255)"
+  "success": true,
+  "data": {
+    "labeled_count": 5,
+    "required_count": 5,
+    "is_chatbot_unlocked": true,
+    "chatbot_context_ready": true,
+    "first_insight": {
+      "headline": "당신은 지속 소비에 쓸 때 만족도가 높네요",
+      "supporting_data": {
+        "category": "지속 소비",
+        "avg_score": 4.6,
+        "count": 3
+      }
+    },
+    "top_happy_consumption": {
+      "message": "tester님의 행복 소비는 지속 소비 지출입니다.",
+      "category": "LASTING",
+      "category_name": "지속 소비",
+      "avg_score": 5.0,
+      "total_amount": 89000,
+      "count": 1
+    },
+    "happy_purchase_archive": [
+      {
+        "transaction_id": "t_xxx",
+        "amount": 89000,
+        "related_total_amount": 89000,
+        "merchant": "유니클로",
+        "category": "LASTING",
+        "occurred_at": "2026-04-20T12:00:00Z",
+        "score": 5,
+        "text": "오래 입을 수 있어서 만족스러웠음"
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
-**Response**: 없음 (200 OK)
+호환 엔드포인트:
+
+- `GET /onboarding/transactions-to-label`
+- `GET /onboarding/progress`
+- `POST /onboarding/first-insight`
 
 ---
 
-### 3-3. Mind Sweep 태스크 수정
+## 7. 구매 전 챗봇 상담
 
-```
-PUT /daily-plans/{dailyPlanId}/mind-sweeps/{taskId}
-Content-Type: application/json
-Authorization: Bearer {token}
+### 7.1 챗봇 세션 시작
+
+```http
+POST /chatbot/sessions
 ```
 
-**Request**:
+요청:
 
 ```json
 {
-  "content": "string (max 255)"
+  "initial_message": "에어팟 프로를 살지 고민 중이야",
+  "amount_hint": 350000,
+  "product_hint": "에어팟 프로"
 }
 ```
 
-**Response**: 없음 (200 OK)
-
----
-
-### 3-4. Mind Sweep 태스크 삭제
-
-```
-DELETE /daily-plans/{dailyPlanId}/mind-sweeps/{taskId}
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 3-5. Mind Sweep 태스크 완료
-
-```
-PATCH /daily-plans/{dailyPlanId}/mind-sweeps/{taskId}/complete
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 3-6. Mind Sweep 태스크 완료 취소
-
-```
-PATCH /daily-plans/{dailyPlanId}/mind-sweeps/{taskId}/uncomplete
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 4. Top Picks (핵심 행동 선택)
-
-> BC: `planning` / Controller: `TopPicksController`
-> Base Path: `/daily-plans/{dailyPlanId}/top-picks`
-
----
-
-### 4-1. Top Pick 목록 조회
-
-```
-GET /daily-plans/{dailyPlanId}/top-picks
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "taskId": "uuid",
-    "content": "string",
-    "completed": false,
-    "estimatedMinutes": 30,
-    "memo": "오늘 반드시 끝내기"
-  }
-]
-```
-
----
-
-### 4-2. Top Pick 선택
-
-```
-POST /daily-plans/{dailyPlanId}/top-picks/{taskId}
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
+응답 `201`:
 
 ```json
 {
-  "estimatedMinutes": 30,
-  "memo": "string (max 255)"
+  "success": true,
+  "data": {
+    "session_id": "sess_xxx",
+    "websocket_url": "/v1/ws/chatbot/sess_xxx",
+    "started_at": "2026-04-26T10:00:00Z",
+    "model_tier": "FULL"
+  },
+  "error": null
 }
 ```
 
-**Response**: 없음 (200 OK)
+챗봇은 온보딩/주간 회고에서 저장된 만족도 데이터를 기반으로 사용자 컨텍스트를 구성합니다.
 
-**에러**:
-- `CORE_SELECTED_LIMIT_EXCEEDED` (400): Top Pick 개수 제한 초과 (BehaviorProfile 기반 동적 제한: LOW=1, MEDIUM=2, HIGH=3)
-- `TASK_NOT_FOUND` (404): 작업을 찾을 수 없음
+### 7.2 WebSocket 상담
 
----
-
-### 4-3. Top Pick 해제
-
-```
-DELETE /daily-plans/{dailyPlanId}/top-picks/{taskId}
-Authorization: Bearer {token}
+```text
+WS /ws/chatbot/{session_id}?token={access_token}
 ```
 
-**Response**: 없음 (200 OK)
-
----
-
-## 5. Morning Task (아침 작업)
-
-> BC: `planning` / Controller: `MorningTaskController`
-> Base Path: `/morning-tasks`
-
----
-
-### 5-1. 아침 작업 목록 조회
-
-```
-GET /morning-tasks?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "taskId": "uuid",
-    "content": "string",
-    "completed": false
-  }
-]
-```
-
----
-
-### 5-2. 아침 작업 생성
-
-```
-POST /morning-tasks?targetDate=2026-04-24
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
+클라이언트 메시지:
 
 ```json
 {
-  "content": "string (max 255)"
+  "type": "user_message",
+  "content": "출퇴근길에 자주 쓸 것 같아"
 }
 ```
 
-**Response**: 없음 (200 OK)
-
----
-
-### 5-3. 아침 작업 수정
-
-```
-PUT /morning-tasks/{dailyPlanId}/{taskId}
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
+서버 토큰 스트리밍:
 
 ```json
 {
-  "content": "string (max 255)"
+  "type": "assistant_token",
+  "content": "최근 "
 }
 ```
 
-**Response**: 없음 (200 OK)
-
----
-
-### 5-4. 아침 작업 삭제
-
-```
-DELETE /morning-tasks/{dailyPlanId}/{taskId}
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 5-5. 아침 작업 완료
-
-```
-PATCH /morning-tasks/{dailyPlanId}/{taskId}/complete
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 5-6. 아침 작업 완료 취소
-
-```
-PATCH /morning-tasks/{dailyPlanId}/{taskId}/uncomplete
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 6. Timetable (시간표)
-
-> BC: `planning` / Controller: `TimetableController`, `SlotController`
-> Base Path: `/timetables`
-
----
-
-### 6-1. 시간표 조회
-
-```
-GET /timetables?dailyPlanId={dailyPlanId}
-Authorization: Bearer {token}
-```
-
-**Response**:
+결정:
 
 ```json
 {
-  "timetableId": "uuid",
-  "dailyPlanId": "uuid",
-  "topPickTotal": 2,
-  "slots": [
+  "type": "decision",
+  "decision": "SKIP"
+}
+```
+
+### 7.3 세션 결정 확정
+
+```http
+POST /chatbot/sessions/{session_id}/decide
+```
+
+요청:
+
+```json
+{
+  "decision": "BUY"
+}
+```
+
+### 7.4 세션 목록 / 상세
+
+```http
+GET /chatbot/sessions
+GET /chatbot/sessions/{session_id}
+```
+
+---
+
+## 8. 주간 피드백
+
+주간 피드백은 최근 3개월 만족도 데이터와 이번 주 지출을 함께 보고 질문을 생성합니다.
+
+요구사항:
+
+- 일주일간 데이터를 바탕으로 질문을 생성합니다.
+- 최근 3개월 데이터와 비교해 질문 컨텍스트를 보강합니다.
+- 질문은 5~10개 범위입니다. 거래 데이터가 부족하면 가능한 질문만 반환될 수 있습니다.
+- 각 질문은 1~5점 필수, 텍스트 선택입니다.
+- 답변 제출 후 주간 인사이트(만족도 평균, 하이라이트)를 반환합니다.
+- 주간 요약(소비 비교, 아낀 금액, 행복 소비 아카이브)은 별도 조회 API로 확인합니다.
+
+### 8.1 이번 주 피드백 질문 조회
+
+```http
+GET /retrospectives/current-week
+```
+
+응답 `200`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "week_start": "2026-04-20",
+    "week_end": "2026-04-26",
+    "is_completed": false,
+    "question_count": 5,
+    "min_question_count": 5,
+    "max_question_count": 10,
+    "questions": [
+      {
+        "question_id": "rq_t_xxx",
+        "transaction": {
+          "transaction_id": "t_xxx",
+          "amount": 35000,
+          "merchant": "스타벅스",
+          "category": "IMMEDIATE",
+          "occurred_at": "2026-04-25T19:30:00Z"
+        },
+        "selection_reason": "DIVERSITY",
+        "pattern_summary": "이번 기간 소비 패턴을 대표하는 항목입니다.",
+        "question": {
+          "title": "이번 소비는 한 주를 돌아봤을 때 만족스러웠나요?",
+          "body": "스타벅스에서 쓴 35,000원이 나에게 남긴 만족도를 기록해 주세요.",
+          "answer_type": "SCORE_WITH_TEXT",
+          "score_scale": {
+            "min": 1,
+            "max": 5,
+            "min_label": "아쉬웠어요",
+            "max_label": "만족스러웠어요"
+          },
+          "required": true
+        },
+        "linked_chatbot_summary": null
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+### 8.2 주간 피드백 답변 제출
+
+```http
+POST /retrospectives
+```
+
+요청:
+
+```json
+{
+  "week_start": "2026-04-20",
+  "answers": [
     {
-      "slotId": "uuid",
-      "taskId": "uuid",
-      "content": "string",
-      "startTime": "09:00:00",
-      "endTime": "10:00:00",
-      "topPick": true
+      "question_id": "rq_t_xxx",
+      "transaction_id": "t_xxx",
+      "score": 4,
+      "text": "커피값은 컸지만 친구와 오래 이야기해서 만족스러웠어요."
     }
   ]
 }
 ```
 
----
-
-### 6-2. Top Pick 슬롯 배정
-
-```
-POST /timetables/{timetableId}/slots/tasks/{taskId}/top-picks
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
+응답 `200`:
 
 ```json
 {
-  "startTime": "09:00:00",
-  "endTime": "10:00:00"
-}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `TIME_OVERLAP` (400): 다른 시간과 겹침
-- `INVALID_TIME_RANGE` (400): 유효하지 않은 시간 범위
-
----
-
-### 6-3. 일반 태스크 슬롯 배정
-
-```
-POST /timetables/{timetableId}/slots/tasks/{taskId}
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "startTime": "10:00:00",
-  "endTime": "11:00:00"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 6-4. 직접 슬롯 추가
-
-```
-POST /timetables/{timetableId}/slots/daily-plans/{dailyPlanId}/direct
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "content": "string (max 255)",
-  "startTime": "14:00:00",
-  "endTime": "15:00:00"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 6-5. 슬롯 시간 변경
-
-```
-PATCH /timetables/{timetableId}/slots/{slotId}/reschedule
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "startTime": "11:00:00",
-  "endTime": "12:00:00"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 6-6. 슬롯 삭제
-
-```
-DELETE /timetables/{timetableId}/slots/{slotId}
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 7. Focus Session (집중 세션)
-
-> BC: `focus` / Controller: `FocusSessionController`
-> Base Path: `/focus-sessions`
-
----
-
-### 7-1. 집중 세션 시작
-
-```
-POST /focus-sessions/start
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "focusSessionId": "uuid",
-  "startedAt": "2026-04-24T01:00:00Z",
-  "endedAt": null,
-  "recordedElapsedSeconds": null,
-  "elapsedSeconds": 0,
-  "inProgress": true
-}
-```
-
-**에러**:
-- `FOCUS_SESSION_ALREADY_IN_PROGRESS` (409): 이미 진행 중인 세션 존재
-
----
-
-### 7-2. 집중 세션 종료
-
-```
-PATCH /focus-sessions/stop
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "focusSessionId": "uuid",
-  "startedAt": "2026-04-24T01:00:00Z",
-  "endedAt": "2026-04-24T01:30:00Z",
-  "recordedElapsedSeconds": 1800,
-  "elapsedSeconds": 1800,
-  "inProgress": false
-}
-```
-
-**에러**:
-- `FOCUS_SESSION_NOT_FOUND` (404): 진행 중인 세션 없음
-
----
-
-### 7-3. 오늘 세션 조회
-
-```
-GET /focus-sessions/today
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "targetDate": "2026-04-24",
-  "queriedAt": "2026-04-24T03:00:00Z",
-  "totalFocusSeconds": 5400,
-  "focusing": false,
-  "sessions": [
-    {
-      "focusSessionId": "uuid",
-      "startedAt": "2026-04-24T01:00:00Z",
-      "endedAt": "2026-04-24T01:30:00Z",
-      "recordedElapsedSeconds": 1800,
-      "elapsedSeconds": 1800,
-      "inProgress": false
+  "success": true,
+  "data": {
+    "retrospective_id": "r_xxx",
+    "week_start": "2026-04-20",
+    "completed_at": "2026-04-26T20:00:00Z",
+    "submitted_count": 5,
+    "weekly_insight": {
+      "headline": "이번 주 만족도 평균 4.0점, 지난주보다 +0.3",
+      "highlight": "지속 소비 카테고리에서 가장 높은 만족"
     }
-  ]
+  },
+  "error": null
 }
 ```
 
----
+### 8.3 주간 요약 조회
 
-### 7-4. 재시작 카드 조회
+회고 제출 후 주간 소비 요약을 별도로 조회합니다.
 
+```http
+GET /retrospectives/{retrospective_id}/weekly-summary
 ```
-GET /focus-sessions/recovery-card
-Authorization: Bearer {token}
-```
 
-**Response**:
+응답 `200`:
 
 ```json
 {
-  "needsRecovery": true,
-  "recoveryType": "MISSED_FOCUS",
-  "suggestedAction": "어제는 쉬어갔어요. 지금 바로 시작해볼까요?",
-  "yesterdayFocusSeconds": 0,
-  "yesterdayTopPickCompletionRate": 0.0
+  "success": true,
+  "data": {
+    "retrospective_id": "r_xxx",
+    "week_start": "2026-04-20",
+    "week_end": "2026-04-26",
+    "spending_comparison": {
+      "current_amount": 200000,
+      "previous_amount": 350000,
+      "difference_amount": -150000,
+      "difference_percent": -42.9,
+      "difference_display": "-150000",
+      "difference_percent_display": "-42.9%",
+      "saved_amount": 150000
+    },
+    "saved_amount_comparison": {
+      "current_amount": 350000,
+      "previous_amount": 0,
+      "difference_amount": 350000,
+      "difference_percent": null,
+      "difference_display": "+350000",
+      "difference_percent_display": "N/A"
+    },
+    "top_happy_consumption": {
+      "message": "tester님의 행복 소비는 지속 소비 지출입니다.",
+      "category": "LASTING",
+      "category_name": "지속 소비",
+      "avg_score": 4.0,
+      "total_amount": 200000,
+      "count": 1
+    },
+    "happy_purchase_archive": [
+      {
+        "transaction_id": "t_xxx",
+        "amount": 35000,
+        "related_total_amount": 35000,
+        "merchant": "스타벅스",
+        "category": "IMMEDIATE",
+        "occurred_at": "2026-04-25T19:30:00Z",
+        "score": 4,
+        "text": "친구와 오래 이야기해서 만족스러웠어요."
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
-**RecoveryType enum**: `MISSED_FOCUS`, `INCOMPLETE_TOP_PICK`, `BOTH`, `NONE`
+### 8.4 과거 회고 목록
 
-**suggestedAction 분기** (BehaviorProfile.RecoveryStyle 기반):
+```http
+GET /retrospectives
+```
 
-| RecoveryStyle | MISSED_FOCUS 메시지 |
-|---------------|-------------------|
-| `QUICK_RESTART` | "어제는 쉬어갔어요. 지금 바로 시작해볼까요?" |
-| `NEEDS_REFLECTION` | "어제 무엇이 어려웠는지 한 줄만 남겨볼까요?" |
-| `SLOW_REBUILDER` | "5분만 해볼까요? 작게 시작하면 돼요." |
-| (프로필 없음) | "다시 시작해볼까요?" |
+쿼리:
+
+- `from_week`: `YYYY-MM-DD`, optional
+- `to_week`: `YYYY-MM-DD`, optional
+- `cursor`: optional
+- `limit`: default `20`, max `100`
 
 ---
 
-## 8. StudyRoom (스터디룸)
+## 9. 행복 소비 / 인사이트
 
-> BC: `study_room` / Controller: `RoomController`, `ParticipantController`, `MyParticipationController`
-> Base Path: `/rooms`, `/my-participations`
+### 9.1 행복 소비 아카이브 조회
 
----
-
-### 8-1. 방 생성
-
-```
-POST /rooms
-Content-Type: application/json
-Authorization: Bearer {token}
+```http
+GET /insights/happy-purchases
 ```
 
-**Request**:
+쿼리:
+
+- `limit`: default `20`, max `100`
+- `cursor`: optional
+
+응답 `200`:
 
 ```json
 {
-  "name": "string (max 20)",
-  "visibility": "PUBLIC"
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "transaction_id": "t_xxx",
+        "amount": 35000,
+        "related_total_amount": 80000,
+        "merchant": "스타벅스",
+        "category": "IMMEDIATE",
+        "occurred_at": "2026-04-25T19:30:00Z",
+        "score": 5,
+        "text": "친구와 오래 이야기해서 만족스러웠어요."
+      }
+    ],
+    "total_count": 47,
+    "total_amount": 1820000,
+    "next_cursor": null
+  },
+  "error": null
 }
 ```
 
-**Visibility enum**: `PUBLIC`, `PRIVATE`
+### 9.2 안 쓴 돈 카운터
 
-**Response**:
+```http
+GET /insights/saved-amount
+```
+
+쿼리:
+
+- `period`: `all | month | year`
+
+응답 `200`:
 
 ```json
 {
-  "roomId": "uuid",
-  "inviteCode": "string (PRIVATE일 때만 값 존재, PUBLIC이면 null)"
+  "success": true,
+  "data": {
+    "total_saved": 1500000,
+    "skip_count": 1,
+    "reconsider_count": 0,
+    "recent_skips": [
+      {
+        "session_id": "sess_xxx",
+        "product": "맥북",
+        "amount": 1500000,
+        "decided_at": "2026-04-10T15:00:00Z"
+      }
+    ]
+  },
+  "error": null
 }
 ```
 
+### 9.3 카테고리별 만족도
+
+```http
+GET /insights/category-satisfaction
+```
+
+쿼리:
+
+- `period`: `30d | 90d | all`
+
+### 9.4 만족도 추세
+
+```http
+GET /insights/score-trend
+```
+
+쿼리:
+
+- `period`: `8w | 12w | 6m`
+
 ---
 
-### 8-2. 방 상세 조회
+## 10. 구독
 
-```
-GET /rooms/{roomId}
-Authorization: Bearer {token}
+### 10.1 구독 상태 조회
+
+```http
+GET /subscription
 ```
 
-**Response**:
+### 10.2 유료 전환
+
+```http
+POST /subscription/upgrade
+```
+
+요청:
 
 ```json
 {
-  "roomId": "uuid",
-  "name": "string",
-  "leaderUserId": "uuid",
-  "currentCount": 3,
-  "createdAt": "2026-04-24T09:00:00",
-  "participants": [
-    {
-      "participantId": "uuid",
-      "userId": "uuid",
-      "sessionMode": "FOCUS",
-      "joinedAt": "2026-04-24T09:00:00"
-    }
-  ]
-}
-```
-
-**SessionMode enum**: `WAITING`, `FOCUS`, `REST`, `ENDED`
-
----
-
-### 8-3. 방 참여
-
-```
-POST /rooms/{roomId}/join
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "inviteCode": "string (PRIVATE 방일 때 필수, PUBLIC은 null 가능)"
-}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `ALREADY_JOINED` (409): 이미 참여 중
-- `ROOM_NOT_FOUND` (404): 방을 찾을 수 없음
-- `PRIVATE_ROOM_REQUIRES_INVITE_CODE` (400): 비공개 방은 초대 코드 필요
-- `INVALID_INVITE_CODE` (400): 유효하지 않은 초대 코드
-
----
-
-### 8-4. 방 퇴장
-
-```
-POST /rooms/{roomId}/leave
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 8-5. 참여자 강퇴 (리더 전용)
-
-```
-DELETE /rooms/{roomId}/participants/{targetUserId}
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `NOT_LEADER` (403): 리더만 수행 가능
-- `LEADER_CANNOT_KICK_SELF` (400): 리더는 자신을 내보낼 수 없음
-
----
-
-### 8-6. 방 참여자 목록 조회
-
-```
-GET /rooms/{roomId}/participants
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "participantId": "uuid",
-    "userId": "uuid",
-    "sessionMode": "WAITING",
-    "joinedAt": "2026-04-24T09:00:00"
-  }
-]
-```
-
----
-
-### 8-7. 집중 시작
-
-```
-PATCH /rooms/{roomId}/participants/focus
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `ALREADY_FOCUSING` (400): 이미 집중 중
-- `PARTICIPANT_ALREADY_ENDED` (400): 이미 퇴장한 참여자
-
----
-
-### 8-8. 휴식 전환
-
-```
-PATCH /rooms/{roomId}/participants/break
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `NOT_FOCUSING` (400): 현재 집중 중이 아님 (WAITING에서도 REST로 전환 가능)
-- `PARTICIPANT_ALREADY_ENDED` (400): 이미 퇴장한 참여자
-
----
-
-### 8-9. 내 참여 현황 조회
-
-```
-GET /my-participations
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "roomId": "uuid",
-    "participantId": "uuid",
-    "sessionMode": "FOCUS",
-    "joinedAt": "2026-04-24T09:00:00"
-  }
-]
-```
-
----
-
-## 9. StudyRoom Chat (스터디룸 채팅)
-
-> BC: `study_room` / Controller: `StudyRoomChatController`
-> 프로토콜: STOMP over WebSocket
-
-### 연결 정보
-
-| 항목 | 값 |
-|------|------|
-| WebSocket 엔드포인트 | `/ws` (SockJS fallback 지원) |
-| STOMP Prefix (발송) | `/app` |
-| STOMP Prefix (구독) | `/topic`, `/queue` |
-
----
-
-### 9-1. 채팅 메시지 발송
-
-```
-STOMP SEND /app/rooms/{roomId}/chat
-```
-
-**Payload**:
-
-```json
-{
-  "content": "string (max 500)"
-}
-```
-
-**브로드캐스트 토픽**: `/topic/rooms/{roomId}/chat`
-
-**브로드캐스트 메시지**:
-
-```json
-{
-  "roomId": "uuid",
-  "senderId": "uuid",
-  "senderName": "string",
-  "content": "string",
-  "sentAt": "2026-04-24T01:00:00Z"
-}
-```
-
-**조건**: 발송자의 `sessionMode`가 `REST`일 때만 허용
-
-**에러 큐**: `/user/queue/errors`
-
-```json
-{
-  "statusCode": 400,
-  "message": "현재 상태에서는 채팅을 보낼 수 없습니다.",
-  "timestamp": "2026-04-24T01:00:00Z"
-}
-```
-
-**에러**:
-- `CHAT_NOT_ALLOWED` (403): 현재 상태에서 채팅 불가 (FOCUS/WAITING/ENDED 상태)
-- `INVALID_CHAT_MESSAGE` (400): 유효하지 않은 채팅 메시지
-
----
-
-## 10. Tiny Win (작은 성취)
-
-> BC: `feedback` / Controller: `TinyWinController`
-> Base Path: `/tiny-wins`
-
----
-
-### 10-1. Tiny Win 생성
-
-```
-POST /tiny-wins
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "title": "string (max 30)",
-  "content": "string (max 3000)"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 10-2. Tiny Win 전체 조회
-
-```
-GET /tiny-wins
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-[
-  {
-    "tinyWinId": "uuid",
-    "title": "string",
-    "content": "string",
-    "localDate": "2026-04-24"
-  }
-]
-```
-
----
-
-### 10-3. Tiny Win 단건 조회
-
-```
-GET /tiny-wins/{tinyWinId}
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "tinyWinId": "uuid",
-  "title": "string",
-  "content": "string",
-  "localDate": "2026-04-24"
-}
-```
-
-**에러**:
-- `TINY_WIN_NOT_FOUND` (404): 작은 성과를 찾을 수 없음
-
----
-
-### 10-4. Tiny Win 제목 수정
-
-```
-PATCH /tiny-wins/{tinyWinId}/title
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "title": "string (max 30)"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 10-5. Tiny Win 내용 수정
-
-```
-PATCH /tiny-wins/{tinyWinId}/content
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "content": "string (max 3000)"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-### 10-6. Tiny Win 삭제
-
-```
-DELETE /tiny-wins/{tinyWinId}
-Authorization: Bearer {token}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 11. Daily Reflection (일일 회고)
-
-> BC: `feedback` / Controller: `DailyReflectionController`
-> Base Path: `/daily-reflections`
-
----
-
-### 11-1. 일일 회고 생성
-
-```
-POST /daily-reflections
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "reflectionDate": "2026-04-24",
-  "whatWentWell": "string (max 500)",
-  "whatBrokeDown": "string (max 1000)",
-  "ifCondition": "string (max 500)",
-  "thenAction": "string (max 500)"
-}
-```
-
-**필드 설명**:
-
-| 필드 | 설명 | 예시 |
-|------|------|------|
-| `whatWentWell` | 오늘 잘한 것 | "아침에 계획대로 시작함" |
-| `whatBrokeDown` | 오늘 무너진 지점 | "점심 이후 핸드폰에 빠짐" |
-| `ifCondition` | If: 실패 상황 | "핸드폰이 자꾸 눈에 들어올 때" |
-| `thenAction` | Then: 복귀 행동 | "서랍에 넣고 타이머를 시작한다" |
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `DAILY_REFLECTION_ALREADY_EXISTS` (409): 해당 날짜에 이미 회고 존재
-
----
-
-### 11-2. 일일 회고 조회
-
-```
-GET /daily-reflections?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "dailyReflectionId": "uuid",
-  "reflectionDate": "2026-04-24",
-  "whatWentWell": "string",
-  "whatBrokeDown": "string",
-  "ifCondition": "string",
-  "thenAction": "string"
-}
-```
-
-**에러**:
-- `DAILY_REFLECTION_NOT_FOUND` (404): 일일 회고를 찾을 수 없음
-
----
-
-### 11-3. 일일 회고 수정
-
-```
-PATCH /daily-reflections/{dailyReflectionId}
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "whatWentWell": "string (max 500)",
-  "whatBrokeDown": "string (max 1000)",
-  "ifCondition": "string (max 500)",
-  "thenAction": "string (max 500)"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 12. Future Vision (미래 비전)
-
-> BC: `visioning` / Controller: `FutureVisionController`
-> Base Path: `/future-vision`
-
----
-
-### 12-1. 비전 생성
-
-```
-POST /future-vision
-Content-Type: multipart/form-data
-Authorization: Bearer {token}
-```
-
-**Request** (form-data):
-
-| 필드 | 타입 | 필수 | 제약 | 설명 |
-|------|------|------|------|------|
-| `weeklyVisionImageUrl` | MultipartFile | O | 비어있지 않은 파일 | 주간 비전 이미지 |
-| `yearlyVisionImageUrl` | MultipartFile | O | 비어있지 않은 파일 | 연간 비전 이미지 |
-| `yearlyVisionDescription` | String | O | max 100 | 연간 비전 설명 |
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `FUTURE_VISION_ALREADY_EXISTS` (409): 이미 존재하는 비전
-
----
-
-### 12-2. 내 비전 조회
-
-```
-GET /future-vision
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "futureVisionId": "uuid",
-  "weeklyVisionImageUrl": "https://...",
-  "yearlyVisionImageUrl": "https://...",
-  "yearlyVisionDescription": "string",
-  "yearlyVisionCreatedAt": "2026-04-24"
+  "plan": "MONTHLY",
+  "payment_method_token": "payment-token"
 }
 ```
 
 ---
 
-### 12-3. 주간 비전 조회
+## 11. AI 내부 호출
 
+### 11.1 거래 카테고리 분류
+
+오픈뱅킹 동기화 후 룰 기반 분류 신뢰도 `< 0.7`일 때 OpenAI 분류를 호출합니다.
+
+### 11.2 온보딩 질문 생성
+
+`GET /onboarding/questions`에서 최근 3개월 미라벨 거래를 후보로 전달합니다.
+
+### 11.3 주간 피드백 질문 생성
+
+`GET /retrospectives/current-week`에서 이번 주 거래와 최근 3개월 라벨 데이터를 함께 전달합니다.
+
+### 11.4 챗봇 응답 생성
+
+챗봇은 라벨링된 거래의 카테고리별 만족도 평균을 사용자 컨텍스트로 사용합니다.
+
+---
+
+## 12. 호출 흐름
+
+### 12.1 신규 가입자
+
+```text
+1. POST /auth/signup
+2. POST /banking/oauth/start
+3. POST /banking/oauth/callback
+4. POST /banking/sync
+5. GET /onboarding/questions
+6. POST /onboarding/feedback
+7. GET /insights/main
+8. POST /chatbot/sessions
 ```
-GET /future-vision/weekly
-Authorization: Bearer {token}
-```
 
-**Response**:
+### 12.2 기존 사용자 메인/주간 피드백
 
-```json
-{
-  "futureVisionId": "uuid",
-  "weeklyVisionImageUrl": "https://..."
-}
+```text
+1. GET /insights/main
+2. GET /retrospectives/current-week
+3. POST /retrospectives
+4. GET /retrospectives/{retrospective_id}/weekly-summary
+5. GET /insights/happy-purchases
+6. GET /insights/saved-amount
 ```
 
 ---
 
-### 12-4. 연간 비전 조회
-
-```
-GET /future-vision/yearly
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "futureVisionId": "uuid",
-  "yearlyVisionImageUrl": "https://...",
-  "yearlyVisionDescription": "string",
-  "yearlyVisionCreatedAt": "2026-04-24"
-}
-```
-
----
-
-### 12-5. 주간 비전 수정
-
-```
-PATCH /future-vision/weekly
-Content-Type: multipart/form-data
-Authorization: Bearer {token}
-```
-
-**Request** (form-data):
-
-| 필드 | 타입 | 필수 | 설명 |
-|------|------|------|------|
-| `weeklyVisionImageUrl` | MultipartFile | O | 주간 비전 이미지 |
-
-**Response**: 없음 (200 OK)
-
----
-
-### 12-6. 연간 비전 수정
-
-```
-PATCH /future-vision/yearly
-Content-Type: multipart/form-data
-Authorization: Bearer {token}
-```
-
-**Request** (form-data):
-
-| 필드 | 타입 | 필수 | 제약 | 설명 |
-|------|------|------|------|------|
-| `yearlyVisionImageUrl` | MultipartFile | O | 비어있지 않은 파일 | 연간 비전 이미지 |
-| `yearlyVisionDescription` | String | O | max 100 | 연간 비전 설명 |
-
-**Response**: 없음 (200 OK)
-
----
-
-## 13. Focus Statistics (집중 통계)
-
-> BC: `statistics` / Controller: `FocusStatisticsController`
-> Base Path: `/focus-statistics`
-
----
-
-### 13-1. 일별 통계 조회
-
-```
-GET /focus-statistics/daily?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "targetDate": "2026-04-24",
-  "queriedAt": "2026-04-24T03:00:00Z",
-  "periodStartDate": "2026-04-24",
-  "periodEndDate": "2026-04-24",
-  "dayCount": 1,
-  "coveredDayCount": 1,
-  "totalFocusSeconds": 5400,
-  "averageDailyFocusSeconds": 5400,
-  "status": "FINAL",
-  "dataSource": "SUMMARY"
-}
-```
-
-**FocusStatisticsStatus enum**: `FINAL`, `PARTIAL`, `FUTURE_EMPTY`
-- `FINAL`: 마감 완료된 데이터
-- `PARTIAL`: 오늘 등 아직 진행 중인 날짜 포함
-- `FUTURE_EMPTY`: 미래 날짜 (데이터 없음)
-
-**FocusStatisticsDataSource enum**: `NONE`, `SUMMARY`, `RAW`, `MIXED`
-
----
-
-### 13-2. 주별 통계 조회
-
-```
-GET /focus-statistics/weekly?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**: 13-1과 동일 구조 (`periodStartDate`~`periodEndDate`가 해당 주 월~일)
-
----
-
-### 13-3. 월별 통계 조회
-
-```
-GET /focus-statistics/monthly?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**: 13-1과 동일 구조 (`periodStartDate`~`periodEndDate`가 해당 월 1일~말일)
-
----
-
-### 13-4. 시간대별 집중 분포 조회
-
-```
-GET /focus-statistics/time-of-day?targetDate=2026-04-24
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "targetDate": "2026-04-24",
-  "queriedAt": "2026-04-24T03:00:00Z",
-  "totalFocusSeconds": 3600,
-  "status": "PARTIAL",
-  "dataSource": "RAW",
-  "hourlyBuckets": [
-    { "hourOfDay": 9, "focusSeconds": 1800 },
-    { "hourOfDay": 10, "focusSeconds": 1800 }
-  ]
-}
-```
-
----
-
-### 13-5. 순공 타이밍 추천
-
-```
-GET /focus-statistics/timing-recommendation
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "targetDate": "2026-04-24",
-  "queriedAt": "2026-04-24T01:00:00Z",
-  "recommendedHours": [
-    { "hourOfDay": 9, "averageFocusSeconds": 1200 },
-    { "hourOfDay": 14, "averageFocusSeconds": 900 }
-  ],
-  "reason": "최근 2주 평일 데이터 기준 집중 시간이 가장 길었던 시간대입니다.",
-  "basedOnData": true
-}
-```
-
-**로직**:
-- 최근 14일 데이터에서 오늘과 같은 유형(평일/주말) 필터
-- 시간대별 평균 집중 시간 상위 1~2개 추천
-- 데이터 부족 시 BehaviorProfile의 `preferredFocusStartHour`/`EndHour` fallback
-- 프로필도 없으면 빈 추천 (`basedOnData: false`, `reason: "데이터가 아직 없어요"`)
-
----
-
-## 14. Behavior Profile (성향 진단)
-
-> BC: `personalization` / Controller: `BehaviorProfileController`
-> Base Path: `/behavior-profiles`
-
----
-
-### 14-1. 프로필 생성 (온보딩)
-
-```
-POST /behavior-profiles
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "executionDifficulty": "MEDIUM",
-  "socialPreference": "LOW",
-  "recoveryStyle": "QUICK_RESTART",
-  "preferredFocusStartHour": 9,
-  "preferredFocusEndHour": 21,
-  "coachingMode": "GENTLE"
-}
-```
-
-**Enum 값**:
-
-| 필드 | 가능한 값 | 설명 |
-|------|----------|------|
-| `executionDifficulty` | `LOW`, `MEDIUM`, `HIGH` | 실행 난이도 (LOW=Top Pick 1개, MEDIUM=2개, HIGH=3개) |
-| `socialPreference` | `LOW`, `MEDIUM`, `HIGH` | 소셜 자극 선호도 |
-| `recoveryStyle` | `QUICK_RESTART`, `NEEDS_REFLECTION`, `SLOW_REBUILDER` | 실패 후 복귀 성향 |
-| `coachingMode` | `GENTLE`, `NEUTRAL`, `STRICT` | 코칭 톤 |
-| `preferredFocusStartHour` | 0~23 | 선호 집중 시작 시각 |
-| `preferredFocusEndHour` | 0~23 | 선호 집중 종료 시각 |
-
-**Response**: 없음 (200 OK)
-
-**에러**:
-- `BEHAVIOR_PROFILE_ALREADY_EXISTS` (409): 이미 존재하는 프로필
-
----
-
-### 14-2. 내 프로필 조회
-
-```
-GET /behavior-profiles/me
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "behaviorProfileId": "uuid",
-  "executionDifficulty": "MEDIUM",
-  "socialPreference": "LOW",
-  "recoveryStyle": "QUICK_RESTART",
-  "preferredFocusStartHour": 9,
-  "preferredFocusEndHour": 21,
-  "coachingMode": "GENTLE"
-}
-```
-
-**에러**:
-- `BEHAVIOR_PROFILE_NOT_FOUND` (404): 프로필을 찾을 수 없음
-
----
-
-### 14-3. 내 프로필 수정
-
-```
-PUT /behavior-profiles/me
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "executionDifficulty": "HIGH",
-  "socialPreference": "MEDIUM",
-  "recoveryStyle": "NEEDS_REFLECTION",
-  "preferredFocusStartHour": 10,
-  "preferredFocusEndHour": 22,
-  "coachingMode": "NEUTRAL"
-}
-```
-
-**Response**: 없음 (200 OK)
-
----
-
-## 15. Accountability (감시자 시스템)
-
-> BC: `accountability`
-> **참고**: 현재 REST Controller(presentation 레이어)는 미구현 상태. 아래는 구현된 서비스 레이어 기반 예정 API.
-
----
-
-### 15-1. 감시 관계 생성 (예정)
-
-```
-POST /accountability-relations
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "targets": ["FOCUS_SESSION", "TOP_PICKS"]
-}
-```
-
-**MonitoringTarget enum**: `FOCUS_SESSION`, `TOP_PICKS`, `TIMETABLE_TASK`
-
-**Response**:
-
-```json
-{
-  "inviteCode": "string",
-  "expiresAt": "2026-04-25T09:00:00"
-}
-```
-
----
-
-### 15-2. 초대 코드로 감시자 참여 (예정)
-
-```
-POST /accountability-relations/{relationId}/join
-Content-Type: application/json
-Authorization: Bearer {token}
-```
-
-**Request**:
-
-```json
-{
-  "inviteCode": "string (max 10)"
-}
-```
-
-**에러**:
-- `INVALID_INVITE_CODE` (400): 유효하지 않은 초대 코드
-- `INVITE_CODE_EXPIRED` (400): 초대 코드 만료
-- `WATCHER_ALREADY_EXISTS` (409): 이미 감시자 존재
-- `CANNOT_JOIN_OWN_ACCOUNTABILITY_RELATION` (400): 자신의 관계에 참여 불가
-
----
-
-### 15-3. 초대 코드 재발급 (예정)
-
-```
-POST /accountability-relations/{relationId}/invite-code/reissue
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "inviteCode": "string",
-  "expiresAt": "2026-04-25T09:00:00"
-}
-```
-
----
-
-### 15-4. 초대 코드 상태 조회 (예정)
-
-```
-GET /accountability-relations/{relationId}/invite-code/status
-Authorization: Bearer {token}
-```
-
-**Response**:
-
-```json
-{
-  "inviteCode": "string",
-  "expiredAt": "2026-04-25T09:00:00",
-  "expired": false,
-  "reissuable": true,
-  "watcherConnected": false
-}
-```
-
----
-
-### 15-5. 감시 대상 집중 세션 조회 (예정)
-
-```
-GET /accountability-relations/{relationId}/focus-sessions?from=2026-04-20&to=2026-04-24
-Authorization: Bearer {token}
-```
-
-**에러**:
-- `MONITORING_TARGET_NOT_ALLOWED` (403): 허용되지 않은 모니터링 대상
-- `INVALID_DATE_RANGE` (400): 유효하지 않은 날짜 범위
-
----
-
-### 15-6. 감시 대상 Top Picks 조회 (예정)
-
-```
-GET /accountability-relations/{relationId}/top-picks?from=2026-04-20&to=2026-04-24
-Authorization: Bearer {token}
-```
-
----
-
-### 15-7. 감시 대상 시간표 작업 조회 (예정)
-
-```
-GET /accountability-relations/{relationId}/timetable-tasks?from=2026-04-20&to=2026-04-24
-Authorization: Bearer {token}
-```
-
----
-
-## Appendix: ErrorCode 전체 목록
-
-| ErrorCode | HTTP Status | 메시지 |
-|-----------|-------------|--------|
-| `INTERNAL_SERVER_ERROR` | 500 | 서버 내부 오류가 발생했습니다. |
-| `INVALID_REQUEST` | 400 | 잘못된 요청입니다. |
-| `EXPIRED_JWT` | 401 | JWT 토큰이 만료되었습니다. |
-| `INVALID_JWT` | 401 | 유효하지 않은 JWT 토큰입니다. |
-| `DUPLICATE_ACCOUNT_ID` | 409 | 이미 존재하는 계정 ID 입니다. |
-| `DUPLICATE_USER` | 409 | 이미 존재하는 사용자입니다. |
-| `DUPLICATE_EMAIL` | 409 | 이미 존재하는 이메일입니다. |
-| `LOGIN_FAILED` | 401 | 로그인에 실패했습니다. |
-| `ACCOUNT_NOT_FOUND` | 404 | 계정 ID를 찾을 수 없습니다. |
-| `PASSWORD_MISMATCH` | 401 | 비밀번호가 일치하지 않습니다. |
-| `USER_NOT_FOUND` | 404 | 사용자를 찾을 수 없습니다. |
-| `USER_CREATION_FAILED` | 500 | 사용자 생성에 실패했습니다. |
-| `PENDING_OAUTH_NOT_FOUND` | 404 | 대기 중인 OAuth 사용자를 찾을 수 없습니다. |
-| `REFRESH_TOKEN_NOT_FOUND` | 401 | 리프레시 토큰을 찾을 수 없습니다. |
-| `IMAGE_NOT_FOUND` | 400 | 이미지를 찾을 수 없습니다. |
-| `INVALID_FILE_EXTENSION` | 400 | 잘못된 파일 확장자입니다. |
-| `FILE_UPLOAD_FAILED` | 500 | 파일 업로드에 실패했습니다. |
-| `FILE_DELETE_FAILED` | 500 | 파일 삭제에 실패했습니다. |
-| `DAILY_PLAN_ALREADY_EXISTS` | 409 | 이미 존재하는 일일 계획입니다. |
-| `DAILY_PLAN_NOT_FOUND` | 404 | 일일 계획을 찾을 수 없습니다. |
-| `FUTURE_VISION_ALREADY_EXISTS` | 409 | 이미 존재하는 미래 비전입니다. |
-| `FUTURE_VISION_NOT_FOUND` | 404 | 미래 비전을 찾을 수 없습니다. |
-| `FUTURE_VISION_CREATION_FAILED` | 500 | 미래 비전 생성에 실패했습니다. |
-| `FUTURE_VISION_UPDATE_FAILED` | 500 | 미래 비전 수정에 실패했습니다. |
-| `TASK_NOT_FOUND` | 404 | 작업을 찾을 수 없습니다. |
-| `INVALID_TASK_TYPE` | 400 | 이 작업에 사용할 수 없는 작업 유형입니다. |
-| `TASK_ALREADY_COMPLETED` | 400 | 완료된 작업은 수정할 수 없습니다. |
-| `CORE_SELECTED_LIMIT_EXCEEDED` | 400 | 상위 선택 개수 제한을 초과했습니다. |
-| `TIMETABLE_NOT_FOUND` | 404 | 타임테이블을 찾을 수 없습니다. |
-| `SLOT_NOT_FOUND` | 404 | 슬롯을 찾을 수 없습니다. |
-| `TIME_OVERLAP` | 400 | 다른 시간과 겹칩니다. |
-| `INVALID_TIME_RANGE` | 400 | 유효하지 않은 시간 범위입니다. |
-| `INVALID_DATE_RANGE` | 400 | 유효하지 않은 날짜 범위입니다. |
-| `TOP_PICKS_NOT_FULLY_ASSIGNED` | 400 | 모든 상위 선택 작업을 먼저 배정해야 합니다. |
-| `TOP_PICK_SLOT_LIMIT_EXCEEDED` | 400 | 상위 선택 슬롯 제한을 초과했습니다. |
-| `NOT_TOP_PICKED_TASK` | 400 | 상위 선택된 작업만 예상 시간을 수정할 수 있습니다. |
-| `INVALID_TOP_PICK_ESTIMATED_MINUTES` | 400 | 상위 선택 예상 시간은 0보다 커야 합니다. |
-| `INVALID_TOP_PICK_MEMO` | 400 | 상위 선택 메모는 비어 있을 수 없으며 255자 이하여야 합니다. |
-| `TOP_PICK_DETAIL_NOT_FOUND` | 404 | 상위 선택 상세 정보를 찾을 수 없습니다. |
-| `TINY_WIN_NOT_FOUND` | 404 | 작은 성과를 찾을 수 없습니다. |
-| `DAILY_REFLECTION_ALREADY_EXISTS` | 409 | 이미 존재하는 일일 회고입니다. |
-| `DAILY_REFLECTION_NOT_FOUND` | 404 | 일일 회고를 찾을 수 없습니다. |
-| `INVALID_DAILY_REFLECTION` | 400 | 일일 회고 내용이 유효하지 않습니다. |
-| `ALREADY_JOINED` | 409 | 이미 해당 방에 참여 중입니다. |
-| `PARTICIPANT_NOT_FOUND` | 404 | 참여자를 찾을 수 없습니다. |
-| `NOT_LEADER` | 403 | 리더만 이 작업을 수행할 수 있습니다. |
-| `LEADER_CANNOT_KICK_SELF` | 400 | 리더는 자신을 내보낼 수 없습니다. |
-| `PRIVATE_ROOM_REQUIRES_INVITE_CODE` | 400 | 비공개 방은 초대 코드가 필요합니다. |
-| `INVALID_INVITE_CODE` | 400 | 유효하지 않은 초대 코드입니다. |
-| `ROOM_NOT_FOUND` | 404 | 방을 찾을 수 없습니다. |
-| `ALREADY_FOCUSING` | 400 | 이미 집중 중입니다. |
-| `NOT_FOCUSING` | 400 | 현재 집중 중이 아닙니다. |
-| `PARTICIPANT_ALREADY_ENDED` | 400 | 이미 퇴장한 참여자입니다. |
-| `FOCUS_SESSION_ALREADY_IN_PROGRESS` | 409 | 이미 진행 중인 집중 세션이 있습니다. |
-| `FOCUS_SESSION_NOT_FOUND` | 404 | 집중 세션을 찾을 수 없습니다. |
-| `FOCUS_SESSION_ALREADY_COMPLETED` | 400 | 이미 완료된 집중 세션입니다. |
-| `INVALID_FOCUS_SESSION` | 400 | 유효하지 않은 집중 세션입니다. |
-| `DEVICE_TOKEN_NOT_FOUND` | 404 | 디바이스 토큰을 찾을 수 없습니다. |
-| `INVITE_CODE_NOT_GENERATED` | 400 | 초대 코드가 생성되지 않았습니다. |
-| `INVITE_CODE_EXPIRED` | 400 | 초대 코드가 만료되었습니다. |
-| `ACCOUNTABILITY_RELATION_NOT_FOUND` | 404 | 감시 관계를 찾을 수 없습니다. |
-| `MONITORING_TARGET_NOT_ALLOWED` | 403 | 허용되지 않은 모니터링 대상입니다. |
-| `NOT_SUBJECT_USER` | 403 | 해당 관계의 주체 유저가 아닙니다. |
-| `WATCHER_ALREADY_EXISTS` | 409 | 이미 감시자가 존재합니다. |
-| `CANNOT_JOIN_OWN_ACCOUNTABILITY_RELATION` | 400 | 자신의 감시 관계에는 참여할 수 없습니다. |
-| `BEHAVIOR_PROFILE_ALREADY_EXISTS` | 409 | 이미 존재하는 행동 프로필입니다. |
-| `BEHAVIOR_PROFILE_NOT_FOUND` | 404 | 행동 프로필을 찾을 수 없습니다. |
-| `INVALID_BEHAVIOR_PROFILE` | 400 | 행동 프로필 내용이 유효하지 않습니다. |
-| `INVALID_CHAT_MESSAGE` | 400 | 유효하지 않은 채팅 메시지입니다. |
-| `CHAT_NOT_ALLOWED` | 403 | 현재 상태에서는 채팅을 보낼 수 없습니다. |
+## 13. 에러 코드
+
+| code | HTTP | 의미 |
+| --- | --- | --- |
+| `INVALID_INPUT` | 400 | 요청 형식 오류 |
+| `UNAUTHORIZED` | 401 | 인증 실패 |
+| `FORBIDDEN` | 403 | 권한 없음 |
+| `NOT_FOUND` | 404 | 리소스 없음 |
+| `RATE_LIMIT_EXCEEDED` | 429 | 요청 제한 초과 |
+| `BANK_LINK_REQUIRED` | 409 | 오픈뱅킹 연동 필요 |
+| `LABELING_REQUIRED` | 409 | 라벨링 미완료 |
+| `CHATBOT_QUOTA_EXCEEDED` | 402 | 챗봇 무료 사용량 초과 |
+| `LLM_UNAVAILABLE` | 503 | OpenAI API 일시 장애 |
+| `INTERNAL_ERROR` | 500 | 서버 내부 오류 |

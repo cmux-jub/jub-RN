@@ -26,6 +26,7 @@ export const endpoints = {
     list: '/retrospectives',
   },
   insights: {
+    main: '/insights/main',
     happyPurchases: '/insights/happy-purchases',
     savedAmount: '/insights/saved-amount',
     categorySatisfaction: '/insights/category-satisfaction',

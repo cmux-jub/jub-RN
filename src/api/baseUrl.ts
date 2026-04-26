@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'https://api.meezy.kr';
+const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
 const configuredApiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL?.trim()?.replace(/\/+$/, '') || DEFAULT_API_BASE_URL;
