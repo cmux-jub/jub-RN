@@ -198,3 +198,39 @@ Web Bundled 117ms node_modules\expo-router\entry.js (1 module)
 Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
 Web Bundled 74ms node_modules\expo-router\entry.js (1 module)
  LOG  [web] Logs will appear in the browser console
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/insights/screens/InsightsOverviewScreen" from "src\app\insights\index.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mInsightsOverviewScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/insights/screens/InsightsOverviewScreen'[39m[33m;[39m
+ [90m   |[39m                                                    [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\insights\index.tsx
+ | import "@/features/insights/screens/InsightsOverviewScreen"
+
+ src\app (require.context)
+
+Unable to resolve "@/features/onboarding/screens/LabelingQueueScreen" from "src\app\onboarding\labeling.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mexport[39m { [33mLabelingQueueScreen[39m [36mas[39m [36mdefault[39m } [36mfrom[39m [32m'@/features/onboarding/screens/LabelingQueueScreen'[39m[33m;[39m
+ [90m   |[39m                                                 [31m[1m^[22m[39m
+ [90m 2 |[39m[0m
+
+Import stack:
+
+ src\app\onboarding\labeling.tsx
+ | import "@/features/onboarding/screens/LabelingQueueScreen"
+
+ src\app (require.context)
+

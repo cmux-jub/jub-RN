@@ -7,12 +7,12 @@ export const mockTransactionsToLabel: TransactionsToLabelResponseData = {
   transactions: [
     {
       transaction_id: 't_demo_1',
-      amount: 89000,
-      merchant: 'Demo Store',
+      amount: 300000,
+      merchant: '중고 에어팟',
       category: 'LASTING',
       occurred_at: '2026-03-12T15:00:00Z',
       selection_reason: 'LARGE_AMOUNT',
-      question: 'Was this purchase still worth it later?',
+      question: '최근에 구매한 “중고 에어팟” 300,000원 만족스러우신가요?',
     },
   ],
 };

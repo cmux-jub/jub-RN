@@ -7,49 +7,75 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 
+const topChipIcon = require('../../../../assets/images/main/top-chip-icon.png');
+const settingsIcon = require('../../../../assets/images/main/settings-icon.png');
+const happyBadgeIcon = require('../../../../assets/images/main/happy-badge.png');
+const spendTrendDownIcon = require('../../../../assets/images/main/spend-trend-down.png');
+const spendTrendUpIcon = require('../../../../assets/images/main/spend-trend-up.png');
+const retrospectiveArrowIcon = require('../../../../assets/images/main/retrospective-arrow.png');
 const homeIcon = require('../../../../assets/images/tabIcons/home.png');
 const aiAdviceIcon = require('../../../../assets/images/tabIcons/explore.png');
 
 const CONNECT_BANK_ROUTE = '/onboarding/connect-bank' as never;
+const HAPPY_ARCHIVE_ROUTE = '/insights/archive' as never;
+const RETROSPECTIVE_ROUTE = '/retrospective' as never;
 const HOME_ROUTE = '/insights' as never;
 const MAIN_CHATBOT_ROUTE = '/chatbot/demo-session' as never;
 const TAB_BAR_HEIGHT = 90;
-const SCREEN_HORIZONTAL_PADDING = 20;
-const SECTION_GAP = 24;
-const CARD_RADIUS = 12;
 
 const LINKED_HOME_CONTENT = {
-  prompt: '유가 상승 대비를 위해선?',
-  promptProgress: '1/3',
   userName: '김효현',
   planLabel: 'FreePlan',
+  happyPrompt: '내가 잘 쓴 소비내역',
   accountStatus: '전체 계좌와 연결 완료',
   happyCategory: '“식비”',
   lastMonthSpend: 1_895_000,
-  lastMonthSpendDelta: -12,
+  lastMonthSpendDelta: '-12%',
   lastMonthSaved: 240_000,
-  lastMonthSavedDelta: 22,
-  retrospectiveProduct: '에어팟 프로3',
+  lastMonthSavedDelta: '+22%',
+  retrospectiveHeadline: '이번 주의 소비 내역에 대해 알아보세요',
+  retrospectiveFooter: '구매 경험 남기고 회고하기',
 } as const;
 
 const UNLINKED_HOME_CONTENT = {
-  prompt: '내가 잘 쓴 소비내역',
-  bankLinkTitle: '오픈 뱅킹 연동하기',
-  emptyMessage: '아직 연결된 계좌가 없어요.',
-  retrospectiveTitle: '오픈 뱅킹을 연동해주세요.',
-  retrospectiveCaption: '오픈 뱅킹 연동하고 돈도 줍고, 행복도 줍기',
+  happyPrompt: '내가 잘 쓴 소비내역',
+  accountStatus: '오픈 뱅킹 연결이 필요해요',
+  happyMessage: '계좌를 연결하면 만족스러웠던 소비를 바로 모아드릴게요.',
+  happyAction: '계좌 연결하기',
+  retrospectiveHeadline: '이번 주의 소비를 회고하려면 계좌 연결을 먼저 완료해주세요',
+  retrospectiveFooter: '계좌 연결하고 회고 준비하기',
 } as const;
-
-type TrendDirection = 'down' | 'up';
 
 export function InsightsOverviewScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const onboardingStatus = useAuthStore((state) => state.onboardingStatus);
+  const signUpNickname = useAuthStore((state) => state.signUpDraft.nickname);
   const isBankLinked = onboardingStatus !== 'NEEDS_BANK_LINK';
+  const trimmedNickname = signUpNickname.trim();
+  const displayName =
+    trimmedNickname.length > 0 ? trimmedNickname : LINKED_HOME_CONTENT.userName;
 
   const handleConnectBank = () => {
     router.push(CONNECT_BANK_ROUTE);
+  };
+
+  const handleHappyArchivePress = () => {
+    if (!isBankLinked) {
+      handleConnectBank();
+      return;
+    }
+
+    router.push(HAPPY_ARCHIVE_ROUTE);
+  };
+
+  const handleRetrospectivePress = () => {
+    if (!isBankLinked) {
+      handleConnectBank();
+      return;
+    }
+
+    router.push(RETROSPECTIVE_ROUTE);
   };
 
   const handleHomePress = () => {
@@ -64,93 +90,142 @@ export function InsightsOverviewScreen() {
     <View style={styles.screen}>
       <SafeAreaView edges={['top']} style={styles.safeArea}>
         <ScrollView
-          showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 28 },
+            { paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 24 },
           ]}
+          showsVerticalScrollIndicator={false}
         >
-          <PromptChip
-            counter={isBankLinked ? LINKED_HOME_CONTENT.promptProgress : undefined}
-            prompt={isBankLinked ? LINKED_HOME_CONTENT.prompt : UNLINKED_HOME_CONTENT.prompt}
-          />
+          <TopPromptChip label={isBankLinked ? LINKED_HOME_CONTENT.happyPrompt : UNLINKED_HOME_CONTENT.happyPrompt} />
 
           <View style={styles.profileRow}>
             <View style={styles.profileCopy}>
-              <Text style={styles.profileName}>{LINKED_HOME_CONTENT.userName}</Text>
+              <Text style={styles.profileName}>{displayName}</Text>
               <Text style={styles.profilePlan}>{LINKED_HOME_CONTENT.planLabel}</Text>
             </View>
-            <Text accessibilityRole="image" style={styles.settingsIcon}>
-              ⚙
-            </Text>
+
+            <Image accessible={false} resizeMode="contain" source={settingsIcon} style={styles.settingsIcon} />
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>행복 소비 찾아보기</Text>
-            {isBankLinked ? (
-              <LinkedHappySpendCard />
-            ) : (
-              <UnlinkedHappySpendCard onConnectBank={handleConnectBank} />
-            )}
+
+            <View style={styles.happySpendCard}>
+              <Text style={styles.accountStatus}>
+                {isBankLinked
+                  ? LINKED_HOME_CONTENT.accountStatus
+                  : UNLINKED_HOME_CONTENT.accountStatus}
+              </Text>
+
+              <View style={styles.happyInsightRow}>
+                <Image
+                  accessible={false}
+                  resizeMode="contain"
+                  source={happyBadgeIcon}
+                  style={[styles.happyBadgeIcon, !isBankLinked && styles.happyBadgeIconDisabled]}
+                />
+
+                <Text style={isBankLinked ? styles.happyInsightText : styles.happyInsightTextDisabled}>
+                  {isBankLinked
+                    ? `${displayName}님의 행복 소비는 ${LINKED_HOME_CONTENT.happyCategory} 지출입니다.`
+                    : UNLINKED_HOME_CONTENT.happyMessage}
+                </Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={handleHappyArchivePress}
+                style={({ pressed }) => [
+                  styles.happyActionButton,
+                  !isBankLinked && styles.happyActionButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text
+                  style={
+                    isBankLinked ? styles.happyActionLabel : styles.happyActionLabelDisabled
+                  }
+                >
+                  {isBankLinked ? '행복 지출 분석하기' : UNLINKED_HOME_CONTENT.happyAction}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>소비 내역</Text>
+
             <View style={styles.metricCard}>
               <MetricRow
-                amount={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSpend : 0}
-                delta={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSpendDelta : undefined}
-                direction="down"
+                amountLabel={isBankLinked ? formatWon(LINKED_HOME_CONTENT.lastMonthSpend) : '-'}
+                deltaLabel={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSpendDelta : undefined}
+                deltaTone="negative"
+                dimmed={!isBankLinked}
+                icon={spendTrendDownIcon}
                 label="지난달 소비 내역"
-                showIndicator={isBankLinked}
               />
+
               <View style={styles.metricDivider} />
+
               <MetricRow
-                amount={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSaved : 0}
-                delta={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSavedDelta : undefined}
-                direction="up"
+                amountLabel={isBankLinked ? formatWon(LINKED_HOME_CONTENT.lastMonthSaved) : '-'}
+                deltaLabel={isBankLinked ? LINKED_HOME_CONTENT.lastMonthSavedDelta : undefined}
+                deltaTone="positive"
+                dimmed={!isBankLinked}
+                icon={spendTrendUpIcon}
                 label="지난달 아낀 금액"
-                showIndicator={isBankLinked}
               />
             </View>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>주간 소비 내역 회고</Text>
-            {isBankLinked ? (
-              <Pressable accessibilityRole="button" onPress={noop} style={styles.retrospectiveCard}>
-                <Text style={styles.retrospectiveHeadline}>
-                  이번에 구매하신{' '}
-                  <Text style={styles.retrospectiveProduct}>
-                    {LINKED_HOME_CONTENT.retrospectiveProduct}
-                  </Text>
-                  {'\n'}
-                  구매 경험이 만족스러우셨나요?
-                </Text>
 
-                <View style={styles.retrospectiveFooter}>
-                  <Text style={styles.retrospectiveFooterLabel}>구매 경험 남기고 회고하기</Text>
-                  <ChevronRight color={colors.gray600} />
-                </View>
-              </Pressable>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                onPress={handleConnectBank}
-                style={styles.retrospectiveCardDisabled}
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleRetrospectivePress}
+              style={({ pressed }) => [
+                styles.retrospectiveCard,
+                !isBankLinked && styles.retrospectiveCardDisabled,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text
+                style={
+                  isBankLinked
+                    ? styles.retrospectiveHeadline
+                    : styles.retrospectiveHeadlineDisabled
+                }
               >
-                <Text style={styles.retrospectiveHeadlineDisabled}>
-                  {UNLINKED_HOME_CONTENT.retrospectiveTitle}
+                {isBankLinked
+                  ? LINKED_HOME_CONTENT.retrospectiveHeadline
+                  : UNLINKED_HOME_CONTENT.retrospectiveHeadline}
+              </Text>
+
+              <View style={styles.retrospectiveFooter}>
+                <Text
+                  style={
+                    isBankLinked
+                      ? styles.retrospectiveFooterLabel
+                      : styles.retrospectiveFooterLabelDisabled
+                  }
+                >
+                  {isBankLinked
+                    ? LINKED_HOME_CONTENT.retrospectiveFooter
+                    : UNLINKED_HOME_CONTENT.retrospectiveFooter}
                 </Text>
 
-                <View style={styles.retrospectiveFooter}>
-                  <Text style={styles.retrospectiveFooterLabelDisabled}>
-                    {UNLINKED_HOME_CONTENT.retrospectiveCaption}
-                  </Text>
-                  <ChevronRight color={colors.gray200} />
-                </View>
-              </Pressable>
-            )}
+                <Image
+                  accessible={false}
+                  resizeMode="contain"
+                  source={retrospectiveArrowIcon}
+                  style={[
+                    styles.retrospectiveArrow,
+                    !isBankLinked && styles.retrospectiveArrowDisabled,
+                  ]}
+                />
+              </View>
+            </Pressable>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -170,45 +245,75 @@ export function InsightsOverviewScreen() {
   );
 }
 
-function LinkedHappySpendCard() {
+type TopPromptChipProps = {
+  label: string;
+};
+
+function TopPromptChip({ label }: TopPromptChipProps) {
   return (
-    <View style={styles.primaryCard}>
-      <Text style={styles.mutedCaption}>{LINKED_HOME_CONTENT.accountStatus}</Text>
-
-      <View style={styles.happyInsightRow}>
-        <HappyBadge variant="linked" />
-        <Text style={styles.happyInsightText}>
-          {`${LINKED_HOME_CONTENT.userName}님의 행복 소비는 ${LINKED_HOME_CONTENT.happyCategory} 지출입니다.`}
-        </Text>
-      </View>
-
-      <Pressable accessibilityRole="button" onPress={noop} style={styles.primaryAction}>
-        <Text style={styles.primaryActionLabel}>행복 지출 분석하기</Text>
-      </Pressable>
+    <View style={styles.topPromptChip}>
+      <Image accessible={false} resizeMode="contain" source={topChipIcon} style={styles.topPromptIcon} />
+      <Text style={styles.topPromptLabel}>{label}</Text>
     </View>
   );
 }
 
-type UnlinkedHappySpendCardProps = {
-  onConnectBank: () => void;
+type MetricRowProps = {
+  label: string;
+  amountLabel: string;
+  deltaLabel?: string;
+  deltaTone: 'negative' | 'positive';
+  icon: ImageSourcePropType;
+  dimmed?: boolean;
 };
 
-function UnlinkedHappySpendCard({ onConnectBank }: UnlinkedHappySpendCardProps) {
+function MetricRow({
+  label,
+  amountLabel,
+  deltaLabel,
+  deltaTone,
+  icon,
+  dimmed = false,
+}: MetricRowProps) {
   return (
-    <View style={styles.primaryCard}>
-      <Pressable accessibilityRole="button" onPress={onConnectBank} style={styles.bankLinkRow}>
-        <Text style={styles.bankLinkTitle}>{UNLINKED_HOME_CONTENT.bankLinkTitle}</Text>
-        <Text style={styles.bankLinkPlus}>+</Text>
-      </Pressable>
+    <View style={styles.metricRow}>
+      <View style={styles.metricSummary}>
+        <Image
+          accessible={false}
+          resizeMode="contain"
+          source={icon}
+          style={[styles.metricIcon, dimmed && styles.metricIconDimmed]}
+        />
 
-      <View style={styles.happyInsightRow}>
-        <HappyBadge variant="unlinked" />
-        <Text style={styles.happyInsightTextDisabled}>{UNLINKED_HOME_CONTENT.emptyMessage}</Text>
+        <View style={styles.metricCopy}>
+          <Text style={[styles.metricLabel, dimmed && styles.metricLabelDisabled]}>{label}</Text>
+          <Text style={[styles.metricAmount, dimmed && styles.metricAmountDisabled]}>
+            {amountLabel}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.primaryActionDisabled}>
-        <Text style={styles.primaryActionLabelDisabled}>행복 지출 분석하기</Text>
-      </View>
+      {deltaLabel ? (
+        <View
+          style={[
+            styles.metricDeltaBadge,
+            deltaTone === 'negative'
+              ? styles.metricDeltaBadgeNegative
+              : styles.metricDeltaBadgePositive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.metricDeltaLabel,
+              deltaTone === 'negative'
+                ? styles.metricDeltaLabelNegative
+                : styles.metricDeltaLabelPositive,
+            ]}
+          >
+            {deltaLabel}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -227,19 +332,17 @@ function BottomTab({ label, isActive, icon, onPress }: BottomTabProps) {
       accessibilityState={{ selected: isActive }}
       hitSlop={8}
       onPress={onPress}
-      style={({ pressed }) => [styles.bottomTab, pressed && styles.bottomTabPressed]}
+      style={({ pressed }) => [styles.bottomTab, pressed && styles.pressed]}
     >
-      <View style={styles.bottomTabIconWrap}>
-        <Image
-          accessible={false}
-          resizeMode="contain"
-          source={icon}
-          style={[
-            styles.bottomTabIcon,
-            isActive ? styles.bottomTabIconActive : styles.bottomTabIconInactive,
-          ]}
-        />
-      </View>
+      <Image
+        accessible={false}
+        resizeMode="contain"
+        source={icon}
+        style={[
+          styles.bottomTabIcon,
+          isActive ? styles.bottomTabIconActive : styles.bottomTabIconInactive,
+        ]}
+      />
       <Text
         style={[
           styles.bottomTabLabel,
@@ -252,123 +355,9 @@ function BottomTab({ label, isActive, icon, onPress }: BottomTabProps) {
   );
 }
 
-type MetricRowProps = {
-  label: string;
-  amount: number;
-  delta?: number;
-  direction: TrendDirection;
-  showIndicator: boolean;
-};
-
-function MetricRow({ label, amount, delta, direction, showIndicator }: MetricRowProps) {
-  const isPositive = direction === 'up';
-
-  return (
-    <View style={styles.metricRow}>
-      <View style={styles.metricSummary}>
-        {showIndicator ? (
-          <View style={styles.metricIconWrap}>
-            <Text
-              style={[
-                styles.metricTrendIcon,
-                isPositive ? styles.metricTrendUp : styles.metricTrendDown,
-              ]}
-            >
-              {isPositive ? '↗' : '↘'}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.metricCopy}>
-          <Text style={styles.metricLabel}>{label}</Text>
-          <Text style={styles.metricAmount}>{formatWon(amount)}</Text>
-        </View>
-      </View>
-
-      {showIndicator && typeof delta === 'number' ? (
-        <View
-          style={[
-            styles.deltaBadge,
-            isPositive ? styles.deltaBadgePositive : styles.deltaBadgeNegative,
-          ]}
-        >
-          <Text
-            style={[
-              styles.deltaLabel,
-              isPositive ? styles.deltaLabelPositive : styles.deltaLabelNegative,
-            ]}
-          >
-            {formatDelta(delta)}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-type PromptChipProps = {
-  prompt: string;
-  counter?: string;
-};
-
-function PromptChip({ prompt, counter }: PromptChipProps) {
-  return (
-    <View style={styles.promptChip}>
-      <PromptIcon />
-      <Text style={styles.promptText}>{prompt}</Text>
-      {counter ? <Text style={styles.promptCounter}>{counter}</Text> : null}
-    </View>
-  );
-}
-
-function PromptIcon() {
-  return (
-    <View style={styles.promptIconOuter}>
-      <View style={styles.promptIconInner} />
-      <View style={styles.promptIconGap} />
-      <View style={styles.promptIconAccent} />
-    </View>
-  );
-}
-
-type HappyBadgeProps = {
-  variant: 'linked' | 'unlinked';
-};
-
-function HappyBadge({ variant }: HappyBadgeProps) {
-  const isLinked = variant === 'linked';
-
-  return (
-    <View style={[styles.happyBadge, isLinked ? styles.happyBadgeLinked : styles.happyBadgeUnlinked]}>
-      <Text
-        style={[
-          styles.happyBadgeLabel,
-          isLinked ? styles.happyBadgeLabelLinked : styles.happyBadgeLabelUnlinked,
-        ]}
-      >
-        ₩
-      </Text>
-    </View>
-  );
-}
-
-type ChevronRightProps = {
-  color: string;
-};
-
-function ChevronRight({ color }: ChevronRightProps) {
-  return <Text style={[styles.chevronRight, { color }]}>›</Text>;
-}
-
 function formatWon(amount: number) {
   return `${amount.toLocaleString('ko-KR')}원`;
 }
-
-function formatDelta(delta: number) {
-  return `${delta > 0 ? '+' : ''}${delta}%`;
-}
-
-function noop() {}
 
 const styles = StyleSheet.create({
   screen: {
@@ -379,71 +368,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
-    paddingTop: 16,
-    gap: SECTION_GAP,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    gap: 24,
   },
-  promptChip: {
+  topPromptChip: {
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     borderRadius: 999,
     backgroundColor: colors.white,
     paddingLeft: 8,
-    paddingRight: 18,
+    paddingRight: 14,
     paddingVertical: 6,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.03,
-    shadowRadius: 17,
-    elevation: 1,
+    shadowOpacity: 0.04,
+    shadowRadius: 14,
+    elevation: 2,
   },
-  promptIconOuter: {
+  topPromptIcon: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    borderWidth: 3,
-    borderColor: colors.mint500,
-    backgroundColor: colors.white,
-    position: 'relative',
-    overflow: 'hidden',
   },
-  promptIconInner: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    right: 3,
-    bottom: 3,
-    borderRadius: 999,
-    backgroundColor: colors.white,
-  },
-  promptIconGap: {
-    position: 'absolute',
-    right: -1,
-    bottom: -1,
-    width: 11,
-    height: 11,
-    borderRadius: 999,
-    backgroundColor: colors.white,
-  },
-  promptIconAccent: {
-    position: 'absolute',
-    top: 1,
-    left: 6,
-    width: 8,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#C5D87C',
-  },
-  promptText: {
-    color: colors.black,
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  promptCounter: {
-    color: colors.gray400,
+  topPromptLabel: {
+    color: colors.gray900,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 22,
@@ -454,12 +404,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   profileCopy: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
+    gap: 2,
   },
   profileName: {
-    color: colors.black,
+    color: colors.gray900,
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 28,
@@ -469,132 +417,89 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 17,
-    marginBottom: 4,
   },
   settingsIcon: {
-    color: colors.gray400,
-    fontSize: 26,
-    lineHeight: 26,
+    width: 24,
+    height: 24,
   },
   section: {
     gap: 12,
   },
   sectionTitle: {
-    color: colors.black,
+    color: colors.gray900,
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 28,
   },
-  primaryCard: {
+  happySpendCard: {
     minHeight: 180,
-    borderRadius: CARD_RADIUS,
+    borderRadius: 12,
     backgroundColor: colors.white,
-    paddingHorizontal: 10,
+    paddingLeft: 10,
+    paddingRight: 10,
     paddingTop: 16,
-    paddingBottom: 22,
+    paddingBottom: 20,
     gap: 22,
   },
-  mutedCaption: {
+  accountStatus: {
     color: colors.gray400,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 17,
-  },
-  bankLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bankLinkTitle: {
-    color: colors.gray400,
-    fontSize: 20,
-    fontWeight: '600',
-    lineHeight: 28,
-  },
-  bankLinkPlus: {
-    color: colors.gray400,
-    fontSize: 32,
-    fontWeight: '300',
-    lineHeight: 24,
-    marginTop: -4,
   },
   happyInsightRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  happyBadgeIcon: {
+    width: 32,
+    height: 32,
+  },
+  happyBadgeIconDisabled: {
+    opacity: 0.35,
+  },
   happyInsightText: {
     flex: 1,
     color: colors.gray900,
     fontSize: 16,
     fontWeight: '500',
-    lineHeight: 23,
+    lineHeight: 24,
   },
   happyInsightTextDisabled: {
     flex: 1,
-    color: colors.gray300,
+    color: colors.gray400,
     fontSize: 16,
     fontWeight: '500',
-    lineHeight: 23,
+    lineHeight: 24,
   },
-  happyBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  happyBadgeLinked: {
-    backgroundColor: colors.yellow300,
-  },
-  happyBadgeUnlinked: {
-    backgroundColor: colors.gray300,
-  },
-  happyBadgeLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 18,
-  },
-  happyBadgeLabelLinked: {
-    color: colors.yellow500,
-  },
-  happyBadgeLabelUnlinked: {
-    color: colors.gray50,
-  },
-  primaryAction: {
+  happyActionButton: {
     alignSelf: 'center',
+    minWidth: 169,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 168,
     borderRadius: 8,
     backgroundColor: colors.mint400,
     paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingVertical: 11,
   },
-  primaryActionDisabled: {
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 168,
-    borderRadius: 8,
+  happyActionButtonDisabled: {
     backgroundColor: colors.gray200,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
   },
-  primaryActionLabel: {
+  happyActionLabel: {
     color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 22,
   },
-  primaryActionLabelDisabled: {
-    color: colors.gray400,
+  happyActionLabelDisabled: {
+    color: colors.gray500,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 22,
   },
   metricCard: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: 12,
     backgroundColor: colors.white,
     overflow: 'hidden',
   },
@@ -612,20 +517,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  metricIconWrap: {
+  metricIcon: {
     width: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 24,
   },
-  metricTrendIcon: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  metricTrendDown: {
-    color: colors.red300,
-  },
-  metricTrendUp: {
-    color: colors.green500,
+  metricIconDimmed: {
+    opacity: 0.35,
   },
   metricCopy: {
     gap: 6,
@@ -636,18 +533,24 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 17,
   },
+  metricLabelDisabled: {
+    color: colors.gray400,
+  },
   metricAmount: {
     color: colors.gray900,
     fontSize: 16,
     fontWeight: '500',
     lineHeight: 22,
   },
+  metricAmountDisabled: {
+    color: colors.gray400,
+  },
   metricDivider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: 20,
     backgroundColor: colors.gray300,
   },
-  deltaBadge: {
+  metricDeltaBadge: {
     minWidth: 71,
     alignItems: 'center',
     justifyContent: 'center',
@@ -655,36 +558,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
-  deltaBadgeNegative: {
+  metricDeltaBadgeNegative: {
     backgroundColor: colors.red100,
   },
-  deltaBadgePositive: {
+  metricDeltaBadgePositive: {
     backgroundColor: colors.mint100,
   },
-  deltaLabel: {
+  metricDeltaLabel: {
     fontSize: 16,
     fontWeight: '500',
     lineHeight: 22,
   },
-  deltaLabelNegative: {
+  metricDeltaLabelNegative: {
     color: colors.red300,
   },
-  deltaLabelPositive: {
+  metricDeltaLabelPositive: {
     color: colors.green500,
   },
   retrospectiveCard: {
-    borderRadius: CARD_RADIUS,
+    borderRadius: 12,
     backgroundColor: colors.mint400,
-    paddingHorizontal: 14,
-    paddingVertical: 20,
-    gap: 12,
+    paddingLeft: 14,
+    paddingRight: 14,
+    paddingTop: 20,
+    paddingBottom: 14,
+    gap: 36,
   },
   retrospectiveCardDisabled: {
-    borderRadius: CARD_RADIUS,
     backgroundColor: colors.gray400,
-    paddingHorizontal: 14,
-    paddingVertical: 20,
-    gap: 12,
   },
   retrospectiveHeadline: {
     color: colors.gray800,
@@ -698,13 +599,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 24,
   },
-  retrospectiveProduct: {
-    fontWeight: '700',
-  },
   retrospectiveFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   retrospectiveFooterLabel: {
     color: colors.gray600,
@@ -718,11 +616,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 17,
   },
-  chevronRight: {
-    fontSize: 18,
-    fontWeight: '600',
-    lineHeight: 18,
-    marginTop: -1,
+  retrospectiveArrow: {
+    width: 20,
+    height: 20,
+  },
+  retrospectiveArrowDisabled: {
+    opacity: 0.4,
   },
   tabBar: {
     position: 'absolute',
@@ -752,15 +651,6 @@ const styles = StyleSheet.create({
     gap: 2,
     paddingVertical: 4,
   },
-  bottomTabPressed: {
-    opacity: 0.7,
-  },
-  bottomTabIconWrap: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   bottomTabIcon: {
     width: 24,
     height: 24,
@@ -781,5 +671,8 @@ const styles = StyleSheet.create({
   },
   bottomTabLabelInactive: {
     color: colors.gray300,
+  },
+  pressed: {
+    opacity: 0.78,
   },
 });
