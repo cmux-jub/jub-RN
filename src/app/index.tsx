@@ -1,1 +1,1 @@
-export { AppStructureScreen as default } from '@/features/root/screens/AppStructureScreen';
+export { SplashScreen as default } from '@/features/splash/screens/SplashScreen';
