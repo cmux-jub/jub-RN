@@ -15,12 +15,21 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ChatbotMessage } from '@/api/types/chatbot';
-import { track } from '@/services/tracking/tracker';
 import { appEvents } from '@/services/tracking/events';
+import { track } from '@/services/tracking/tracker';
 import { useChatbotSessionStore } from '@/store/chatbotSessionStore';
-import { colors, radius, spacing } from '@/theme';
+import { colors, spacing } from '@/theme';
 
-const EMPTY_PREVIEW_PROMPT = '30만원 중고 에어팟을 구매할까?';
+const EMPTY_PREVIEW_PROMPT = '30만원 중고\n에어팟을 구매할까?';
+const DEFAULT_ASSISTANT_REPLY =
+  '효현님의 소비습관을 분석해본 결과,\n이미 이어폰 소비 내역이 있어서 비추천 합니다.';
+const GENERIC_ASSISTANT_REPLY =
+  '최근 비슷한 소비와 카테고리 만족도를 같이 보면,\n지금 필요한 지출인지 더 선명하게 판단할 수 있어요.';
+const COMPOSER_CORNER_RADIUS = 24;
+const CHAT_BUBBLE_RADIUS = 12;
+const HERO_MARK_SIZE = 100;
+const AVATAR_MARK_SIZE = 30;
+const WATERMARK_MARK_SIZE = 120;
 
 function ChevronLeftIcon() {
   return (
@@ -41,30 +50,154 @@ function SendIcon() {
   );
 }
 
+function createPreviewMessages(prompt: string): ChatbotMessage[] {
+  const createdAt = new Date().toISOString();
+  const assistantReply = prompt.includes('에어팟')
+    ? DEFAULT_ASSISTANT_REPLY
+    : GENERIC_ASSISTANT_REPLY;
+
+  return [
+    {
+      role: 'user',
+      content: prompt,
+      created_at: createdAt,
+    },
+    {
+      role: 'assistant',
+      content: assistantReply,
+      created_at: createdAt,
+    },
+  ];
+}
+
+function BrandMark({
+  backgroundColor,
+  faded = false,
+  size,
+}: {
+  backgroundColor: string;
+  faded?: boolean;
+  size: number;
+}) {
+  const circleSize = Math.round(size * 0.6);
+  const borderWidth = Math.max(4, Math.round(size * 0.13));
+  const gapWidth = Math.round(size * 0.5);
+  const gapHeight = Math.round(size * 0.34);
+  const gapBottom = Math.max(2, Math.round(size * 0.06));
+  const capSize = Math.max(5, Math.round(size * 0.16));
+  const capBottom = Math.max(4, Math.round(size * 0.14));
+  const capInset = Math.max(6, Math.round(size * 0.18));
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.brandMark,
+        {
+          width: size,
+          height: size,
+          opacity: faded ? 0.12 : 1,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.brandMarkCircle,
+          {
+            width: circleSize,
+            height: circleSize,
+            borderRadius: circleSize / 2,
+            borderWidth,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.brandMarkGap,
+          {
+            width: gapWidth,
+            height: gapHeight,
+            bottom: gapBottom,
+            backgroundColor,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.brandMarkCap,
+          {
+            width: capSize,
+            height: capSize,
+            borderRadius: capSize / 2,
+            bottom: capBottom,
+            left: capInset,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.brandMarkCap,
+          styles.brandMarkCapSoft,
+          {
+            width: capSize,
+            height: capSize,
+            borderRadius: capSize / 2,
+            bottom: capBottom,
+            right: capInset,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
 function EmptyHero({ prompt }: { prompt: string }) {
   return (
     <View style={styles.emptyHero}>
-      <View style={styles.heroRing}>
-        <View style={styles.heroRingCircle} />
-        <View style={styles.heroRingGap} />
-        <View style={[styles.heroRingCap, styles.heroRingCapLeft]} />
-        <View style={[styles.heroRingCap, styles.heroRingCapRight]} />
+      <BrandMark backgroundColor={colors.gray100} size={HERO_MARK_SIZE} />
+      <View style={styles.emptyHeroTextWrap}>
+        <Text style={styles.emptyHeroText}>{prompt}</Text>
       </View>
-      <Text style={styles.emptyHeroText}>{prompt}</Text>
     </View>
   );
 }
 
 function MessageBubble({ message }: { message: ChatbotMessage }) {
-  const isUser = message.role === 'user';
+  if (message.role === 'user') {
+    return (
+      <View style={styles.userMessageRow}>
+        <View style={styles.userMessageBubble}>
+          <Text style={styles.chatMessageText}>{message.content}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowAssistant]}>
-      <View style={[styles.messageBubble, isUser ? styles.messageBubbleUser : styles.messageBubbleAssistant]}>
-        <Text style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextAssistant]}>
-          {message.content}
-        </Text>
+    <View style={styles.assistantMessageRow}>
+      <BrandMark backgroundColor={colors.gray100} size={AVATAR_MARK_SIZE} />
+      <View style={styles.assistantMessageBubble}>
+        <Text style={styles.chatMessageText}>{message.content}</Text>
       </View>
+    </View>
+  );
+}
+
+function FeedbackPrompt() {
+  return (
+    <Pressable accessibilityRole="button" onPress={() => undefined} style={styles.feedbackPrompt}>
+      <BrandMark backgroundColor={colors.white} size={24} />
+      <Text numberOfLines={1} style={styles.feedbackPromptText}>
+        대화가 만족스러우셨나요? 만족할 시 <Text style={styles.feedbackPromptLink}>클릭</Text>
+      </Text>
+    </Pressable>
+  );
+}
+
+function Watermark() {
+  return (
+    <View pointerEvents="none" style={styles.watermarkWrap}>
+      <BrandMark backgroundColor={colors.gray100} faded size={WATERMARK_MARK_SIZE} />
     </View>
   );
 }
@@ -78,20 +211,22 @@ export function ChatbotSessionScreen() {
     draftMessage: state.draftMessage,
     setDraftMessage: state.setDraftMessage,
   }));
-  const [messages, setMessages] = useState<ChatbotMessage[]>([]);
+  const previewPrompt = draftMessage.trim().length > 0 ? draftMessage.trim() : EMPTY_PREVIEW_PROMPT;
+  const [messages, setMessages] = useState<ChatbotMessage[]>(() =>
+    sessionId ? createPreviewMessages(previewPrompt) : [],
+  );
   const [composerHeight, setComposerHeight] = useState(0);
-  const [previewPrompt] = useState(() => {
-    const normalizedPrompt = draftMessage.trim();
-    return normalizedPrompt.length > 0 ? normalizedPrompt : EMPTY_PREVIEW_PROMPT;
-  });
+  const hasConversation = messages.length > 0;
+  const hasAssistantMessage = messages.some((message) => message.role === 'assistant');
+  const feedbackBottomOffset = composerHeight + spacing.lg;
 
   useEffect(() => {
-    if (messages.length === 0) {
+    if (!hasConversation) {
       return;
     }
 
     scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [messages]);
+  }, [hasConversation, messages]);
 
   const handleGoBack = () => {
     if (router.canGoBack()) {
@@ -150,28 +285,39 @@ export function ChatbotSessionScreen() {
         </View>
 
         <View style={styles.content}>
-          {messages.length === 0 ? (
+          {hasConversation ? (
+            <View style={styles.messageStage}>
+              <Watermark />
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.messageScrollView}
+                contentContainerStyle={[
+                  styles.messageContent,
+                  { paddingBottom: feedbackBottomOffset + 84 },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {messages.map((message) => (
+                  <MessageBubble
+                    key={`${message.created_at}-${message.role}-${message.content}`}
+                    message={message}
+                  />
+                ))}
+              </ScrollView>
+              {hasAssistantMessage ? (
+                <View
+                  pointerEvents="box-none"
+                  style={[styles.feedbackPromptWrap, { bottom: feedbackBottomOffset }]}
+                >
+                  <FeedbackPrompt />
+                </View>
+              ) : null}
+            </View>
+          ) : (
             <View style={styles.emptyStateWrapper}>
               <EmptyHero prompt={previewPrompt} />
             </View>
-          ) : (
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.messageScrollView}
-              contentContainerStyle={[
-                styles.messageContent,
-                { paddingBottom: composerHeight + spacing.lg },
-              ]}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {messages.map((message) => (
-                <MessageBubble
-                  key={`${message.created_at}-${message.role}-${message.content}`}
-                  message={message}
-                />
-              ))}
-            </ScrollView>
           )}
         </View>
 
@@ -269,6 +415,17 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    position: 'relative',
+  },
+  messageStage: {
+    flex: 1,
+    position: 'relative',
+  },
+  watermarkWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 92,
   },
   emptyStateWrapper: {
     flex: 1,
@@ -281,99 +438,113 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  heroRing: {
-    width: 100,
-    height: 100,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroRingCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 13,
-    borderColor: colors.mint500,
-    transform: [{ scaleX: 1.28 }, { scaleY: 1.28 }],
-    opacity: 0.88,
-  },
-  heroRingGap: {
-    position: 'absolute',
-    bottom: 6,
-    width: 50,
-    height: 34,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    backgroundColor: colors.gray100,
-  },
-  heroRingCap: {
-    position: 'absolute',
-    bottom: 14,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.mint500,
-  },
-  heroRingCapLeft: {
-    left: 18,
-    opacity: 0.94,
-  },
-  heroRingCapRight: {
-    right: 18,
-    opacity: 0.62,
+  emptyHeroTextWrap: {
+    maxWidth: 180,
   },
   emptyHeroText: {
-    maxWidth: 180,
     textAlign: 'center',
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',
     color: colors.black,
   },
+  brandMark: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandMarkCircle: {
+    borderColor: colors.mint500,
+    transform: [{ scaleX: 1.28 }, { scaleY: 1.28 }],
+  },
+  brandMarkGap: {
+    position: 'absolute',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
+  },
+  brandMarkCap: {
+    position: 'absolute',
+    backgroundColor: colors.mint500,
+  },
+  brandMarkCapSoft: {
+    opacity: 0.62,
+  },
   messageScrollView: {
     flex: 1,
   },
   messageContent: {
-    paddingTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingHorizontal: 20,
+    gap: 20,
+  },
+  userMessageRow: {
+    alignItems: 'flex-end',
+  },
+  userMessageBubble: {
+    maxWidth: 120,
+    backgroundColor: colors.white,
+    borderRadius: CHAT_BUBBLE_RADIUS,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  assistantMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  messageRow: {
-    width: '100%',
-    flexDirection: 'row',
-  },
-  messageRowAssistant: {
-    justifyContent: 'flex-start',
-  },
-  messageRowUser: {
-    justifyContent: 'flex-end',
-  },
-  messageBubble: {
-    maxWidth: '78%',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-  },
-  messageBubbleAssistant: {
+  assistantMessageBubble: {
+    maxWidth: 238,
     backgroundColor: colors.white,
+    borderRadius: CHAT_BUBBLE_RADIUS,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  messageBubbleUser: {
-    backgroundColor: colors.gray900,
+  chatMessageText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '500',
+    color: colors.black,
   },
-  messageText: {
-    fontSize: 15,
+  feedbackPromptWrap: {
+    position: 'absolute',
+    left: 36,
+    right: 36,
+    alignItems: 'center',
+  },
+  feedbackPrompt: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+    paddingLeft: 8,
+    paddingRight: 18,
+    paddingVertical: 6,
+    shadowColor: colors.black,
+    shadowOpacity: 0.03,
+    shadowRadius: 17,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    elevation: 2,
+  },
+  feedbackPromptText: {
+    flexShrink: 1,
+    fontSize: 16,
     lineHeight: 22,
+    fontWeight: '600',
+    color: colors.black,
   },
-  messageTextAssistant: {
-    color: colors.gray800,
-  },
-  messageTextUser: {
-    color: colors.white,
+  feedbackPromptLink: {
+    color: colors.mint500,
+    textDecorationLine: 'underline',
   },
   composerShell: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: COMPOSER_CORNER_RADIUS,
+    borderTopRightRadius: COMPOSER_CORNER_RADIUS,
     paddingTop: spacing.md,
     paddingHorizontal: spacing.md,
   },
