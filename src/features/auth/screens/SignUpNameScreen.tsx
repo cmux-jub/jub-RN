@@ -1,20 +1,52 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, TextInput } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AuthStepLayout } from '@/features/auth/components/AuthStepLayout';
 import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
-import { radius } from '@/theme/radius';
+
+const FIGMA_SCREEN_HEIGHT = 852;
+const NAV_TOP_RATIO = 44 / FIGMA_SCREEN_HEIGHT;
+const HEADER_TOP_RATIO = 108 / FIGMA_SCREEN_HEIGHT;
+const FORM_TOP_RATIO = 219 / FIGMA_SCREEN_HEIGHT;
+const INDICATOR_BOTTOM_RATIO = 166 / FIGMA_SCREEN_HEIGHT;
+const CTA_BOTTOM_RATIO = 54 / FIGMA_SCREEN_HEIGHT;
+
+const COPY = {
+  navTitle: '\uD68C\uC6D0\uAC00\uC785',
+  title: '\uC774\uB984',
+  subtitleTop: '\uC0AC\uC6A9\uC790\uB2D8\uC758',
+  subtitleBottom: '\uC774\uB984\uC744 \uC791\uC131\uD574\uC8FC\uC138\uC694',
+  label: '\uC774\uB984',
+  submit: '\uD68C\uC6D0\uAC00\uC785',
+  hasAccount: '\uACC4\uC815\uC774 \uC788\uC73C\uC2E0\uAC00\uC694?',
+  login: '\uB85C\uADF8\uC778',
+} as const;
 
 export function SignUpNameScreen() {
   const router = useRouter();
+  const { height } = useWindowDimensions();
   const { signUpDraft, updateSignUpDraft } = useAuthStore();
   const [nickname, setNickname] = useState(signUpDraft.nickname);
 
   const normalizedName = nickname.trim();
+  const navTop = Math.max(44, Math.round(height * NAV_TOP_RATIO));
+  const headerTop = Math.max(108, Math.round(height * HEADER_TOP_RATIO));
+  const formTop = Math.max(219, Math.round(height * FORM_TOP_RATIO));
+  const indicatorBottom = Math.max(146, Math.round(height * INDICATOR_BOTTOM_RATIO));
+  const ctaBottom = Math.max(36, Math.round(height * CTA_BOTTOM_RATIO));
 
-  const handleNext = () => {
+  const handleSubmit = () => {
     if (!normalizedName) {
       return;
     }
@@ -23,63 +55,237 @@ export function SignUpNameScreen() {
     router.push('/signup/complete' as never);
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/signup/password' as never);
+  };
+
+  const handleLogin = () => {
+    router.replace('/login' as never);
+  };
+
   return (
-    <AuthStepLayout
-      description="서비스에서 사용할 이름을 입력해주세요."
-      onPrimaryPress={handleNext}
-      primaryDisabled={!normalizedName}
-      primaryLabel="다음"
-      secondaryAction={
-        <Pressable
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => router.back()}
-          style={({ pressed }) => pressed && styles.secondaryPressed}
-        >
-          <Text style={styles.secondaryText}>이전 단계</Text>
-        </Pressable>
-      }
-      stepLabel="회원가입 3/4"
-      title="이름을 입력해주세요"
-    >
-      <TextInput
-        autoCapitalize="words"
-        onChangeText={setNickname}
-        placeholder="이름"
-        placeholderTextColor={colors.gray400}
-        style={styles.input}
-        textContentType="name"
-        value={nickname}
-      />
-      <Text style={styles.helper}>입력한 이름으로 회원가입 완료 화면이 이어집니다.</Text>
-    </AuthStepLayout>
+    <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.screen}
+      >
+        <View style={[styles.navBar, { top: navTop }]}>
+          <Pressable
+            accessibilityLabel="Back"
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={handleBack}
+            style={({ pressed }) => [styles.backButton, pressed && styles.linkPressed]}
+          >
+            <Text style={styles.backIcon}>{'<'}</Text>
+          </Pressable>
+          <Text style={styles.navTitle}>{COPY.navTitle}</Text>
+        </View>
+
+        <View style={[styles.headerBlock, { top: headerTop }]}>
+          <Text style={styles.title}>{COPY.title}</Text>
+          <Text style={styles.subtitle}>
+            {COPY.subtitleTop}
+            {'\n'}
+            {COPY.subtitleBottom}
+          </Text>
+        </View>
+
+        <View style={[styles.formBlock, { top: formTop }]}>
+          <Text style={styles.fieldLabel}>{COPY.label}</Text>
+          <TextInput
+            autoCapitalize="words"
+            onChangeText={setNickname}
+            placeholder={COPY.label}
+            placeholderTextColor={colors.gray400}
+            style={styles.input}
+            textContentType="name"
+            value={nickname}
+          />
+        </View>
+
+        <View style={[styles.indicatorRow, { bottom: indicatorBottom }]}>
+          <View style={styles.inactiveIndicator} />
+          <View style={styles.inactiveIndicator} />
+          <View style={styles.activeIndicator} />
+        </View>
+
+        <View style={[styles.footerBlock, { bottom: ctaBottom }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleSubmit}
+            style={({ pressed }) => [styles.submitButton, pressed && styles.buttonPressed]}
+          >
+            <Text style={styles.submitButtonLabel}>{COPY.submit}</Text>
+          </Pressable>
+
+          <View style={styles.loginRow}>
+            <Text style={styles.loginPrompt}>{COPY.hasAccount}</Text>
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={handleLogin}
+              style={({ pressed }) => pressed && styles.linkPressed}
+            >
+              <Text style={styles.loginLink}>{COPY.login}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  input: {
-    minHeight: 56,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.gray200,
+  safeArea: {
+    flex: 1,
     backgroundColor: colors.white,
-    paddingHorizontal: 18,
-    color: colors.black,
-    fontSize: 16,
   },
-  helper: {
-    color: colors.gray600,
-    fontSize: 14,
+  screen: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  navBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 48,
+    justifyContent: 'center',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 24,
+    width: 24,
+    height: 24,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  backIcon: {
+    color: colors.gray500,
+    fontSize: 28,
+    fontWeight: '400',
+    lineHeight: 28,
+  },
+  navTitle: {
+    textAlign: 'center',
+    color: colors.gray800,
+    fontSize: 16,
+    fontWeight: '500',
     lineHeight: 20,
   },
-  secondaryText: {
-    color: colors.gray700,
-    fontSize: 14,
+  headerBlock: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    gap: 8,
+  },
+  title: {
+    color: colors.black,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 38,
+    letterSpacing: -0.8,
+  },
+  subtitle: {
+    color: colors.gray500,
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 22,
+  },
+  formBlock: {
+    position: 'absolute',
+    left: 20,
+    right: 19,
+    gap: 6,
+  },
+  fieldLabel: {
+    color: colors.gray900,
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  input: {
+    height: 48,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.gray50,
+    backgroundColor: colors.gray50,
+    paddingHorizontal: 20,
+    color: colors.gray900,
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  indicatorRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  activeIndicator: {
+    width: 11,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.mint500,
+  },
+  inactiveIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: colors.gray200,
+  },
+  footerBlock: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    gap: 20,
+  },
+  submitButton: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9999,
+    backgroundColor: colors.black,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+  },
+  submitButtonLabel: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  loginRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  loginPrompt: {
+    color: colors.black,
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 20,
+  },
+  loginLink: {
+    color: colors.black,
+    fontSize: 16,
     fontWeight: '600',
     lineHeight: 20,
     textDecorationLine: 'underline',
   },
-  secondaryPressed: {
+  buttonPressed: {
+    opacity: 0.84,
+  },
+  linkPressed: {
     opacity: 0.72,
   },
 });
